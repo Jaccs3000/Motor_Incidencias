@@ -1,0 +1,19 @@
+spring:
+  profiles:
+    active: local
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+monitor:
+  logs:
+    directory: logs
+  sync:
+    lock-timeout-minutes: 30
+
+jira:
+  base-url: ""
+  email: ""
+  api-token: ""

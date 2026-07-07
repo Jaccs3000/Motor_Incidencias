@@ -9,7 +9,7 @@ server:
 
 monitor:
   logs:
-    directory: logs
+    directory: Logs
   sync:
     lock-timeout-minutes: 30
 

@@ -1,4 +1,5 @@
 import { openDB } from "idb";
+import { writeBackendLog } from "../api/backendApi";
 
 const DB_NAME = "monitor-incidencias";
 const DB_VERSION = 1;
@@ -25,6 +26,11 @@ export async function getSetting(key, fallback = null) {
 export async function setSetting(key, value) {
   const db = await dbPromise;
   await db.put("appSettings", value, key);
+  try {
+    await writeBackendLog("db", "INFO", `setSetting ${key}`);
+  } catch {
+    // ignore logging errors
+  }
 }
 
 export async function getAll(storeName) {
@@ -35,11 +41,21 @@ export async function getAll(storeName) {
 export async function put(storeName, value) {
   const db = await dbPromise;
   await db.put(storeName, value);
+  try {
+    await writeBackendLog("db", "INFO", `put ${storeName} key=${JSON.stringify(value)}`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function del(storeName, key) {
   const db = await dbPromise;
   await db.delete(storeName, key);
+  try {
+    await writeBackendLog("db", "INFO", `del ${storeName} key=${key}`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function get(storeName, key) {
@@ -52,6 +68,11 @@ export async function putMany(storeName, values) {
   const tx = db.transaction(storeName, "readwrite");
   await Promise.all(values.map((value) => tx.store.put(value)));
   await tx.done;
+  try {
+    await writeBackendLog("db", "INFO", `putMany ${storeName} count=${values.length}`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function clearStore(storeName) {

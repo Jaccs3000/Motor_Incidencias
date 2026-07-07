@@ -1,4 +1,5 @@
 import { getAll, put } from "../db/database";
+import { writeBackendLog } from "../api/backendApi";
 import { evaluateConditions } from "../utils/filters";
 import { monitorConfig } from "../config/monitorConfig";
 
@@ -70,6 +71,11 @@ export async function createNotificationsForIssue({ alertRules, currentIssue, pr
     });
     unreadFingerprints.add(fingerprint);
     created.push(notification);
+    try {
+      await writeBackendLog("notifications", "INFO", `Created notification ${notification.id} issue=${notification.issueKey}`);
+    } catch {
+      // ignore
+    }
   }
 
   return created;
@@ -86,6 +92,11 @@ export async function markNotificationRead(notification) {
     status: "read",
     readAt: new Date().toISOString(),
   });
+  try {
+    await writeBackendLog("notifications", "INFO", `Marked read ${notification.id}`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function getNotificationsDueToShow() {
@@ -103,6 +114,11 @@ export async function markNotificationShown(notification) {
     lastShownAt: now.toISOString(),
     nextReminderAt: nextReminder.toISOString(),
   });
+  try {
+    await writeBackendLog("notifications", "INFO", `Shown notification ${notification.id}`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function showNativeNotification(notification) {
@@ -117,6 +133,11 @@ export async function showNativeNotification(notification) {
   });
   native.onclick = () => window.focus();
   await markNotificationShown(notification);
+  try {
+    await writeBackendLog("notifications", "INFO", `Native shown ${notification.id}`);
+  } catch {
+    // ignore
+  }
 }
 
 function renderMessage(template, context) {

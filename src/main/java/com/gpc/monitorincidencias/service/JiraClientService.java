@@ -79,7 +79,8 @@ public class JiraClientService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> get(String url) {
         try {
-            return restClient.get()
+            logService.info("jira", "Calling Jira URL: " + url);
+            Map<String, Object> result = restClient.get()
                     .uri(url)
                     .header(HttpHeaders.AUTHORIZATION, "Basic " + basicToken())
                     .header(HttpHeaders.ACCEPT, "application/json")
@@ -88,14 +89,16 @@ public class JiraClientService {
                         throw new JiraRequestException(response.getStatusCode().value(), response.getStatusText());
                     })
                     .body(Map.class);
+            logService.info("jira", "Jira response received from: " + url + "; keys=" + (result.getOrDefault("issues", "[]")).toString());
+            return result;
         } catch (RestClientResponseException ex) {
-            logService.error("sync", "Jira HTTP " + ex.getStatusCode().value() + " calling " + url);
+            logService.error("jira", "Jira HTTP " + ex.getStatusCode().value() + " calling " + url);
             throw new JiraRequestException(ex.getStatusCode().value(), ex.getResponseBodyAsString());
         } catch (JiraRequestException ex) {
-            logService.error("sync", "Jira HTTP " + ex.status() + " calling " + url + ": " + ex.getMessage());
+            logService.error("jira", "Jira HTTP " + ex.status() + " calling " + url + ": " + ex.getMessage());
             throw ex;
         } catch (Exception ex) {
-            logService.error("sync", "Unexpected Jira error calling " + url + ": " + ex.getMessage());
+            logService.error("jira", "Unexpected Jira error calling " + url + ": " + ex.getMessage());
             throw ex;
         }
     }

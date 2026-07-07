@@ -1,0 +1,18 @@
+# Copia este archivo como config/application-local.yml y completa los valores locales.
+# No subas API tokens reales al repositorio.
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+monitor:
+  logs:
+    directory: logs
+  sync:
+    lock-timeout-minutes: 30
+
+jira:
+  base-url: https://puertodecartagena.atlassian.net
+  email: usuario@empresa.com
+  api-token: PEGAR_API_TOKEN_AQUI

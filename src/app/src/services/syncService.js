@@ -38,9 +38,17 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
 
     for (let index = 0; index < seedRawIssues.length; index += 1) {
       const seed = seedRawIssues[index];
+      if (!seed?.key) {
+        warnings.push(`Jira devolvio una incidencia sin key en la posicion ${index + 1}. Revisa los campos retornados por la busqueda.`);
+        continue;
+      }
       onProgress?.(`Recorriendo proyecto ${index + 1} de ${seedRawIssues.length}...`);
       const traversal = await traverseProject(seed, jiraBaseUrl, issueMap, warnings);
       const projectGroup = buildProjectGroup(seed.key, traversal.projectIssueKeys, issueMap);
+      if (!projectGroup.issueKeys.length) {
+        warnings.push(`No se encontraron incidencias persistibles para ${seed.key}.`);
+        continue;
+      }
       projectGroups.push(projectGroup);
       await put("projectGroups", projectGroup);
 

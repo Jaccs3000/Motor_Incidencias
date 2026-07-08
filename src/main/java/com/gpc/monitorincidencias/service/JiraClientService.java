@@ -32,6 +32,7 @@ public class JiraClientService {
                 .fromUriString(properties.normalizedBaseUrl())
                 .path("/rest/api/3/search/jql")
                 .queryParam("jql", jql)
+                .queryParam("fields", "*all")
                 .build()
                 .toUriString();
         return get(url);

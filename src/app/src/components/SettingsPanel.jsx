@@ -21,9 +21,6 @@ export function SettingsPanel({
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Typography variant="h6">Configuración general</Typography>
         <Grid container spacing={2} sx={{ mt: 0.5 }}>
-          <Grid size={{ xs: 12, md: 8 }}>
-            <TextField fullWidth label="URL base Jira" value={appSettings.jiraBaseUrl} onChange={(e) => setAppSettings({ ...appSettings, jiraBaseUrl: e.target.value })} />
-          </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
             <TextField fullWidth type="number" label="Intervalo sincronización (min)" value={appSettings.syncIntervalMinutes} onChange={(e) => setAppSettings({ ...appSettings, syncIntervalMinutes: Number(e.target.value) })} />
           </Grid>

@@ -1,6 +1,6 @@
 import { acquireSyncLock, fetchIssuesByKeys, releaseSyncLock, searchJira, writeBackendLog } from "../api/backendApi";
 import { monitorConfig } from "../config/monitorConfig";
-import { get, getAll, put, putMany, setSetting } from "../db/database";
+import { clearStore, get, getAll, putMany, setSetting } from "../db/database";
 import { buildJqlFromFilter } from "../utils/filters";
 import { getAllNeighborKeys, isRelevantIssue, normalizeIssue } from "../utils/jiraExtractors";
 import { buildProjectGroup } from "../utils/projectBuilder";
@@ -34,6 +34,7 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
 
     const issueMap = new Map();
     const projectGroups = [];
+    const issuesToPersist = new Map();
     const alertRules = await getAll("alertRules");
 
     for (let index = 0; index < seedRawIssues.length; index += 1) {
@@ -50,18 +51,21 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
         continue;
       }
       projectGroups.push(projectGroup);
-      await put("projectGroups", projectGroup);
 
       for (const issueKey of traversal.persistedIssueKeys) {
         const currentIssue = issueMap.get(issueKey);
         const previousIssue = await get("issues", issueKey);
         currentIssue.projectGroupId = projectGroup.projectGroupId;
         await createNotificationsForIssue({ alertRules, currentIssue, previousIssue, projectGroup });
-        await put("issues", currentIssue);
+        issuesToPersist.set(currentIssue.issueKey, currentIssue);
       }
     }
 
-    await putMany("projectGroups", mergeProjectGroups(projectGroups));
+    const mergedProjectGroups = mergeProjectGroups(projectGroups);
+    await clearStore("projectGroups");
+    await clearStore("issues");
+    await putMany("projectGroups", mergedProjectGroups);
+    await putMany("issues", [...issuesToPersist.values()]);
     await setSetting("lastSyncStatus", warnings.length ? "warning" : "success");
     await setSetting("lastSyncMessage", warnings.length ? warnings.join(" | ") : "Sincronizado correctamente");
     await writeBackendLog("sync", warnings.length ? "WARN" : "INFO", `Sincronizacion finalizada. Proyectos: ${projectGroups.length}. Advertencias: ${warnings.length}`);

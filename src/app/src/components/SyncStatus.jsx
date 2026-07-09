@@ -23,9 +23,9 @@ export function SyncStatus({ status, lastAttemptAt, message }) {
       />
       <Box sx={{ textAlign: "right" }}>
         <Typography variant="caption" color="text.secondary">
-          Último intento: {lastAttemptAt ? new Date(lastAttemptAt).toLocaleString() : "sin registro"}
+          Ultima Sincronizacion: {lastAttemptAt ? new Date(lastAttemptAt).toLocaleString() : "sin registro"}
         </Typography>
-        {message ? (
+        {message && message !== config.label ? (
           <Typography variant="caption" color="text.secondary" display="block">
             {message}
           </Typography>

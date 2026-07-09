@@ -1,7 +1,7 @@
 import { Button, Grid, Paper, Stack, Typography } from "@mui/material";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 
-export function IssueDetail({ issue }) {
+export function IssueDetail({ issue, onClose }) {
   if (!issue) {
     return (
       <Paper variant="outlined" sx={{ p: 2 }}>
@@ -19,14 +19,19 @@ export function IssueDetail({ issue }) {
           <Typography variant="h6">{issue.issueKey}</Typography>
           <Typography variant="body2" color="text.secondary">{issue.summary}</Typography>
         </div>
-        <Button
-          variant="contained"
-          startIcon={<ExternalLink size={17} />}
-          disabled={!issue.jiraUrl}
-          onClick={() => window.open(issue.jiraUrl, "_blank", "noopener,noreferrer")}
-        >
-          Abrir incidencia en Jira
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="contained"
+            startIcon={<ExternalLink size={17} />}
+            disabled={!issue.jiraUrl}
+            onClick={() => window.open(issue.jiraUrl, "_blank", "noopener,noreferrer")}
+          >
+            Abrir incidencia en Jira
+          </Button>
+          <Button variant="outlined" startIcon={<X size={17} />} onClick={onClose}>
+            Ocultar
+          </Button>
+        </Stack>
       </Stack>
       <Grid container spacing={1.5} sx={{ mt: 1 }}>
         {detailEntries.map(([key, value]) => (

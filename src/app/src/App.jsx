@@ -14,7 +14,6 @@ import { getUnreadNotifications } from "./services/notificationService";
 import { runSynchronization } from "./services/syncService";
 
 const defaultSettings = {
-  jiraBaseUrl: "https://puertodecartagena.atlassian.net",
   syncIntervalMinutes: 5,
 };
 
@@ -31,25 +30,45 @@ export default function App() {
   const [syncMessage, setSyncMessage] = useState("");
   const [lastAttemptAt, setLastAttemptAt] = useState(null);
   const [syncProgress, setSyncProgress] = useState("");
+  const [nextSyncAt, setNextSyncAt] = useState(null);
+  const [now, setNow] = useState(Date.now());
   const [backendStatus, setBackendStatus] = useState(null);
   const [snackbar, setSnackbar] = useState(null);
   const syncingRef = useRef(false);
 
   const hasFilters = filters.length > 0;
   const syncDisabled = syncingRef.current || !hasFilters;
+  const filtersRef = useRef([]);
+  const backendStatusRef = useRef(null);
 
   useEffect(() => {
     initialize();
   }, []);
 
   useEffect(() => {
-    if (!hasFilters) return undefined;
-    const minutes = Math.max(1, Number(appSettings.syncIntervalMinutes || 5));
-    const interval = window.setInterval(() => {
-      void handleSync();
-    }, minutes * 60000);
-    return () => window.clearInterval(interval);
+    filtersRef.current = filters;
+  }, [filters]);
+
+  useEffect(() => {
+    backendStatusRef.current = backendStatus;
+  }, [backendStatus]);
+
+  useEffect(() => {
+    setNextSyncAt(hasFilters ? Date.now() + syncIntervalMs() : null);
   }, [hasFilters, appSettings.syncIntervalMinutes]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!hasFilters || !nextSyncAt) return undefined;
+    const timeout = window.setTimeout(() => {
+      void handleSync();
+    }, Math.max(0, nextSyncAt - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [hasFilters, nextSyncAt]);
 
   const sortedProjectGroups = useMemo(
     () => [...projectGroups].sort((a, b) => String(a.description).localeCompare(String(b.description))),
@@ -63,7 +82,8 @@ export default function App() {
     const storedLastStatus = await getSetting("lastSyncStatus", "idle");
     const storedLastMessage = await getSetting("lastSyncMessage", "");
     setAppSettings({ ...defaultSettings, ...storedSettings });
-    setFilters(await getAll("jiraFilters"));
+    const storedFilters = await getAll("jiraFilters");
+    setFilters(storedFilters);
     setAlertRules(await getAll("alertRules"));
     setVisibleColumns(storedColumns);
     setProjectGroups(await getAll("projectGroups"));
@@ -73,14 +93,20 @@ export default function App() {
     setSyncMessage(storedLastMessage);
     if (!(await getAll("jiraFilters")).length) setTab("settings");
     try {
-      setBackendStatus(await getHealth());
+      const health = await getHealth();
+      setBackendStatus(health);
+      if (storedFilters.length) {
+        window.setTimeout(() => {
+          void handleSync({ backendStatusOverride: health, filtersOverride: storedFilters });
+        }, 0);
+      }
     } catch (error) {
       setBackendStatus({ status: "DOWN", error: error.message });
     }
   }
 
   async function saveSettings() {
-    await setSetting("settings", appSettings);
+    await setSetting("settings", { syncIntervalMinutes: appSettings.syncIntervalMinutes });
     await setSetting("visibleColumns", visibleColumns);
     await clearStore("jiraFilters");
     await putMany("jiraFilters", filters);
@@ -88,6 +114,9 @@ export default function App() {
     await putMany("alertRules", alertRules);
     setSnackbar({ severity: "success", message: "Configuración guardada." });
     if (filters.length) setTab("main");
+    if (filters.length && !syncingRef.current) {
+      await handleSync({ filtersOverride: filters });
+    }
   }
 
   async function refreshData() {
@@ -98,8 +127,9 @@ export default function App() {
     setSyncMessage(await getSetting("lastSyncMessage", ""));
   }
 
-  async function handleSync() {
+  async function handleSync({ backendStatusOverride = null, filtersOverride = null } = {}) {
     if (syncingRef.current) return;
+    const activeFilters = filtersOverride || filtersRef.current;
     syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncMessage("Sincronizando...");
@@ -107,7 +137,7 @@ export default function App() {
     setLastAttemptAt(new Date().toISOString());
     try {
       const result = await runSynchronization({
-        jiraBaseUrl: appSettings.jiraBaseUrl,
+        jiraBaseUrl: (backendStatusOverride || backendStatusRef.current)?.jira?.baseUrl || "",
         onProgress: setSyncProgress,
       });
       setSyncStatus(result.status);
@@ -120,11 +150,35 @@ export default function App() {
     } finally {
       syncingRef.current = false;
       setSyncProgress("");
+      setSelectedIssue(null);
+      setNextSyncAt(activeFilters.length ? Date.now() + syncIntervalMs() : null);
       await refreshData();
     }
   }
 
+  function syncIntervalMs() {
+    return Math.max(1, Number(appSettings.syncIntervalMinutes || 5)) * 60000;
+  }
+
+  function formatCountdown(targetTime) {
+    if (!targetTime || !hasFilters) return "";
+    const remainingMs = Math.max(0, targetTime - now);
+    const totalSeconds = Math.ceil(remainingMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const parts = [];
+    if (hours) parts.push(`${hours}h`);
+    if (hours || minutes) parts.push(`${minutes}m`);
+    parts.push(`${seconds}s`);
+    return parts.join(" ");
+  }
+
   async function selectIssue(issueKey) {
+    if (selectedIssue?.issueKey === issueKey) {
+      setSelectedIssue(null);
+      return;
+    }
     setSelectedIssue(await get("issues", issueKey));
   }
 
@@ -137,9 +191,14 @@ export default function App() {
           </Typography>
           <NotificationBell notifications={notifications} onChanged={refreshData} />
           <SyncStatus status={syncStatus} lastAttemptAt={lastAttemptAt} message={syncProgress || syncMessage} />
-          <Button variant="contained" startIcon={<RefreshCw size={17} />} disabled={syncDisabled} onClick={handleSync}>
-            Sincronizar
-          </Button>
+          <Stack alignItems="center" spacing={0.25}>
+            <Button variant="contained" startIcon={<RefreshCw size={17} />} disabled={syncDisabled} onClick={handleSync}>
+              Sincronizar
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              {syncingRef.current ? "Sincronizando..." : hasFilters ? `Auto sync en ${formatCountdown(nextSyncAt)}` : "Sin auto sync"}
+            </Typography>
+          </Stack>
           <Button variant="outlined" startIcon={<Settings size={17} />} onClick={() => setTab("settings")}>
             Configuración
           </Button>
@@ -175,7 +234,7 @@ export default function App() {
           ) : (
             <Stack spacing={2}>
               <ProjectGrid projectGroups={sortedProjectGroups} visibleColumns={visibleColumns} onIssueClick={selectIssue} />
-              <IssueDetail issue={selectedIssue} />
+              <IssueDetail issue={selectedIssue} onClose={() => setSelectedIssue(null)} />
             </Stack>
           )}
         </Stack>

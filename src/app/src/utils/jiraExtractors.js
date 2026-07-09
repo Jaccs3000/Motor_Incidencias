@@ -8,6 +8,16 @@ export function getByPath(source, path) {
   }, source);
 }
 
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 export function extractIssueKeys(issue) {
   const links = issue?.fields?.issuelinks || [];
   const linkedIssueKeys = links
@@ -52,7 +62,17 @@ export function normalizeIssue(rawIssue, jiraBaseUrl) {
 
 export function isRelevantIssue(rawIssue) {
   const issueType = rawIssue?.fields?.issuetype?.name;
-  return monitorConfig.issueTypesToPersist.includes(issueType);
+  const projectKey = rawIssue?.fields?.project?.key;
+  const normalizedIssueType = normalizeText(issueType);
+  const configuredIssueTypes = monitorConfig.issueTypesToPersist.map(normalizeText);
+  return configuredIssueTypes.includes(normalizedIssueType) || isKnownMojibakeType(normalizedIssueType) || monitorConfig.linkedProjectsToPersist.includes(projectKey);
+}
+
+function isKnownMojibakeType(normalizedIssueType) {
+  return (
+    (normalizedIssueType.includes("pruebas") && normalizedIssueType.includes("autom")) ||
+    (normalizedIssueType.includes("implementaci") && normalizedIssueType.includes("q"))
+  );
 }
 
 export function getAllNeighborKeys(rawIssue) {

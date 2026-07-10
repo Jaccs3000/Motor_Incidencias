@@ -15,17 +15,6 @@ import { runSynchronization } from "./services/syncService";
 
 const defaultSettings = {
   syncIntervalMinutes: 5,
-  autoSyncSchedule: {
-    weeklyWindows: [
-      { days: [1, 2, 3, 4, 5], start: "08:00", end: "12:00" },
-      { days: [1, 2, 3, 4, 5], start: "13:00", end: "17:30" },
-      { days: [6], start: "07:30", end: "11:30" },
-    ],
-    specificDates: [
-      { month: 1, day: 1, start: "00:00", end: "23:59" },
-      { month: 12, day: 7, start: "00:00", end: "23:59" },
-    ],
-  },
 };
 
 export default function App() {
@@ -46,9 +35,10 @@ export default function App() {
   const [backendStatus, setBackendStatus] = useState(null);
   const [snackbar, setSnackbar] = useState(null);
   const syncingRef = useRef(false);
+  const autoSyncSchedule = monitorConfig.autoSyncSchedule;
 
   const hasFilters = filters.length > 0;
-  const autoSyncAllowed = isAutoSyncAllowed(appSettings.autoSyncSchedule, new Date(now));
+  const autoSyncAllowed = isAutoSyncAllowed(autoSyncSchedule, new Date(now));
   const autoSyncPaused = hasFilters && !autoSyncAllowed && syncStatus !== "syncing";
   const displayedSyncStatus = autoSyncPaused ? "paused" : syncStatus;
   const syncDisabled = syncingRef.current || !hasFilters;
@@ -79,14 +69,14 @@ export default function App() {
   useEffect(() => {
     if (!hasFilters || !nextSyncAt) return undefined;
     const timeout = window.setTimeout(() => {
-      if (isAutoSyncAllowed(appSettings.autoSyncSchedule, new Date())) {
+      if (isAutoSyncAllowed(autoSyncSchedule, new Date())) {
         void handleSync();
       } else {
         setNextSyncAt(Date.now() + 60000);
       }
     }, Math.max(0, nextSyncAt - Date.now()));
     return () => window.clearTimeout(timeout);
-  }, [hasFilters, nextSyncAt, appSettings.autoSyncSchedule]);
+  }, [hasFilters, nextSyncAt, autoSyncSchedule]);
 
   const sortedProjectGroups = useMemo(
     () => [...projectGroups].sort((a, b) => String(a.description).localeCompare(String(b.description))),
@@ -113,7 +103,7 @@ export default function App() {
     try {
       const health = await getHealth();
       setBackendStatus(health);
-      if (storedFilters.length && isAutoSyncAllowed((storedSettings || defaultSettings).autoSyncSchedule, new Date())) {
+      if (storedFilters.length && isAutoSyncAllowed(autoSyncSchedule, new Date())) {
         window.setTimeout(() => {
           void handleSync({ backendStatusOverride: health, filtersOverride: storedFilters });
         }, 0);
@@ -126,7 +116,6 @@ export default function App() {
   async function saveSettings() {
     const settingsToSave = {
       syncIntervalMinutes: appSettings.syncIntervalMinutes,
-      autoSyncSchedule: appSettings.autoSyncSchedule || defaultSettings.autoSyncSchedule,
     };
     await setSetting("settings", settingsToSave);
     await setSetting("visibleColumns", visibleColumns);
@@ -136,7 +125,7 @@ export default function App() {
     await putMany("alertRules", alertRules);
     setSnackbar({ severity: "success", message: "Configuración guardada." });
     if (filters.length) setTab("main");
-    if (filters.length && !syncingRef.current && isAutoSyncAllowed(settingsToSave.autoSyncSchedule, new Date())) {
+    if (filters.length && !syncingRef.current && isAutoSyncAllowed(autoSyncSchedule, new Date())) {
       await handleSync({ filtersOverride: filters });
     }
   }
@@ -253,7 +242,7 @@ export default function App() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="xl" sx={{ py: 3 }}>
+      <Container maxWidth={false} disableGutters sx={{ px: "1cm", py: 3 }}>
         <Stack spacing={2}>
           {backendStatus?.status === "DOWN" ? (
             <Alert severity="error">Backend local no disponible: {backendStatus.error}</Alert>

@@ -24,9 +24,11 @@ export function extractIssueKeys(issue) {
     .flatMap((link) => [link.inwardIssue?.key, link.outwardIssue?.key])
     .filter(Boolean);
   const subtaskIssueKeys = (issue?.fields?.subtasks || []).map((subtask) => subtask.key).filter(Boolean);
+  const parentIssueKey = issue?.fields?.parent?.key || null;
   return {
     linkedIssueKeys: [...new Set(linkedIssueKeys)],
     subtaskIssueKeys: [...new Set(subtaskIssueKeys)],
+    parentIssueKey,
   };
 }
 
@@ -35,7 +37,7 @@ export function normalizeIssue(rawIssue, jiraBaseUrl) {
   monitorConfig.attributes.forEach((attribute) => {
     attributes[attribute.key] = getByPath(rawIssue, attribute.path);
   });
-  const { linkedIssueKeys, subtaskIssueKeys } = extractIssueKeys(rawIssue);
+  const { linkedIssueKeys, subtaskIssueKeys, parentIssueKey } = extractIssueKeys(rawIssue);
   const issueKey = rawIssue.key;
   const issueType = attributes.issueType || rawIssue.fields?.issuetype?.name || null;
   const status = attributes.status || rawIssue.fields?.status?.name || null;
@@ -51,10 +53,12 @@ export function normalizeIssue(rawIssue, jiraBaseUrl) {
       ...attributes,
       linkedIssueKeys,
       subtaskIssueKeys,
+      parentIssueKey,
       browseUrl: jiraBaseUrl ? `${jiraBaseUrl.replace(/\/$/, "")}/browse/${issueKey}` : "",
     },
     linkedIssueKeys,
     subtaskIssueKeys,
+    parentIssueKey,
     jiraUrl: jiraBaseUrl ? `${jiraBaseUrl.replace(/\/$/, "")}/browse/${issueKey}` : "",
     lastFetchedAt: new Date().toISOString(),
   };

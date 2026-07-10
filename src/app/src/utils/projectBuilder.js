@@ -42,10 +42,6 @@ function buildGeneralStatus({ testDeploys, criteriaTestings, preProdDeploys, pre
   return "";
 }
 
-function findIssueByType(issues, matcher) {
-  return issues.find((issue) => matcher(normalizeText(issue.issueType)));
-}
-
 function issuesByType(issues, matcher) {
   return issues.filter((issue) => matcher(normalizeText(issue.issueType))).sort((a, b) => String(a.issueKey).localeCompare(String(b.issueKey)));
 }
@@ -58,12 +54,12 @@ function time(issue, key) {
   return Number(issue?.attributes?.[key] || 0);
 }
 
-function owner(issue) {
-  return issue?.attributes.assignee || "";
+function sumTime(issues, key) {
+  return issues.reduce((total, issue) => total + time(issue, key), 0);
 }
 
-function issueKey(issue) {
-  return issue?.issueKey || "";
+function owner(issue) {
+  return issue?.attributes.assignee || "";
 }
 
 function status(issue) {
@@ -108,8 +104,9 @@ function classifySubtasks(subtasks) {
 
 export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
   const issues = issueKeys.map((key) => issueMap.get(key)).filter(Boolean);
-  const testing = findIssueByType(issues, (type) => type === "testing");
-  const criteriaDoc = findIssueByType(issues, (type) => type.includes("documentar criterios"));
+  const testings = issuesByType(issues, (type) => type === "testing");
+  const testing = testings[0];
+  const criteriaDocs = issuesByType(issues, (type) => type.includes("documentar criterios"));
   const automations = issuesByType(issues, (type) => type.includes("pruebas") && type.includes("autom"));
   const trackings = issuesByType(issues, (type) => type.includes("implementaci") && type.includes("q"));
   const testDeploys = issuesByType(issues, (type) => type.includes("paso a test"));
@@ -120,7 +117,7 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
   const infrastructures = issues.filter((issue) => issue.projectKey === "MDI").sort((a, b) => String(a.issueKey).localeCompare(String(b.issueKey)));
   const preProdTestings = issuesByType(issues, (type) => type === "testing pre-produccion");
   const preProdCriteriaTestings = issuesByType(issues, (type) => type.includes("testing criterios pre-produccion"));
-  const preProdCriteriaDoc = findIssueByType(issues, (type) => type === "criterios pre-produccion");
+  const preProdCriteriaDocs = issuesByType(issues, (type) => type === "criterios pre-produccion");
   const criteriaTestings = issues.filter((issue) => isType(issue, "Testing de Criterios")).sort((a, b) => String(a.issueKey).localeCompare(String(b.issueKey)));
   const criteria = issuesByType(issues, (type) => type.includes("criterios de aceptacion") || type.includes("test criterios"));
   const corrections = issuesByType(issues, (type) => type.includes("correccion")).length;
@@ -132,21 +129,21 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
   const computedFields = {
     description: testing?.summary || issues[0]?.summary || rootIssueKey,
     generalStatus: generalStatus || testing?.status || issues[0]?.status || "",
-    testingIssue: issueKey(testing),
-    testOwner: owner(testing),
+    testingIssue: keys(testings),
+    testOwner: owners(testings),
     developer: testing?.attributes.developer || testing?.attributes.creator || "",
-    plannedTimeHours: hours(time(testing, "timeOriginalEstimate")),
-    spentTimeHours: hours(time(testing, "timeSpent")),
-    remainingTimeHours: hours(time(testing, "timeRemainingEstimate")),
+    plannedTimeHours: hours(sumTime(testings, "timeOriginalEstimate")),
+    spentTimeHours: hours(sumTime(testings, "timeSpent")),
+    remainingTimeHours: hours(sumTime(testings, "timeRemainingEstimate")),
     criteriaTestingIssue: keys(criteriaTestings),
     criteriaTestingOwner: owners(criteriaTestings, "Sin asignar"),
     criteriaTestingStatus: statuses(criteriaTestings),
-    criteriaDocIssue: issueKey(criteriaDoc),
-    criteriaDocStatus: status(criteriaDoc),
-    criteriaOwner: owner(criteriaDoc) || criteriaDoc?.attributes.criteriaResponsible || "",
-    criteriaPlannedTimeHours: hours(time(criteriaDoc, "timeOriginalEstimate")),
-    criteriaSpentTimeHours: hours(time(criteriaDoc, "timeSpent")),
-    criteriaRemainingTimeHours: hours(time(criteriaDoc, "timeRemainingEstimate")),
+    criteriaDocIssue: keys(criteriaDocs),
+    criteriaDocStatus: statuses(criteriaDocs),
+    criteriaOwner: criteriaDocs.map((issue) => owner(issue) || issue?.attributes.criteriaResponsible || ""),
+    criteriaPlannedTimeHours: hours(sumTime(criteriaDocs, "timeOriginalEstimate")),
+    criteriaSpentTimeHours: hours(sumTime(criteriaDocs, "timeSpent")),
+    criteriaRemainingTimeHours: hours(sumTime(criteriaDocs, "timeRemainingEstimate")),
     corrections,
     automationIssue: keys(automations),
     automationOwner: owners(automations, "Sin asignar"),
@@ -188,9 +185,9 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
     preProdCriteriaTestingIssue: keys(preProdCriteriaTestings),
     preProdCriteriaTestingOwner: owners(preProdCriteriaTestings, "Sin asignar"),
     preProdCriteriaTestingStatus: statuses(preProdCriteriaTestings),
-    preProdCriteriaDocIssue: issueKey(preProdCriteriaDoc),
-    preProdCriteriaDocOwner: owner(preProdCriteriaDoc),
-    preProdCriteriaDocStatus: status(preProdCriteriaDoc),
+    preProdCriteriaDocIssue: keys(preProdCriteriaDocs),
+    preProdCriteriaDocOwner: owners(preProdCriteriaDocs),
+    preProdCriteriaDocStatus: statuses(preProdCriteriaDocs),
     closedCriteriaPercent: criteria.length ? Math.round((closedCriteria / criteria.length) * 100) : 0,
   };
 

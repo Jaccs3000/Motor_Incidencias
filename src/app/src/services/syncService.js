@@ -35,6 +35,7 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
     const issueMap = new Map();
     const projectGroups = [];
     const issuesToPersist = new Map();
+    const groupedIssueKeys = new Set();
     const alertRules = await getAll("alertRules");
 
     for (let index = 0; index < seedRawIssues.length; index += 1) {
@@ -43,14 +44,20 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
         warnings.push(`Jira devolvio una incidencia sin key en la posicion ${index + 1}. Revisa los campos retornados por la busqueda.`);
         continue;
       }
+      if (groupedIssueKeys.has(seed.key)) {
+        continue;
+      }
       onProgress?.(`Recorriendo proyecto ${index + 1} de ${seedRawIssues.length}...`);
       const traversal = await traverseProject(seed, jiraBaseUrl, issueMap, warnings);
-      const projectGroup = buildProjectGroup(seed.key, traversal.projectIssueKeys, issueMap);
+      const projectGroup = buildProjectGroup(seed.key, traversal.persistedIssueKeys, issueMap);
       if (!projectGroup.issueKeys.length) {
         warnings.push(`No se encontraron incidencias persistibles para ${seed.key}.`);
         continue;
       }
       projectGroups.push(projectGroup);
+      for (const issueKey of traversal.projectIssueKeys) {
+        groupedIssueKeys.add(issueKey);
+      }
 
       for (const issueKey of traversal.persistedIssueKeys) {
         const currentIssue = issueMap.get(issueKey);
@@ -62,6 +69,12 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
     }
 
     const mergedProjectGroups = mergeProjectGroups(projectGroups);
+    for (const projectGroup of mergedProjectGroups) {
+      for (const issueKey of projectGroup.issueKeys) {
+        const issue = issuesToPersist.get(issueKey);
+        if (issue) issue.projectGroupId = projectGroup.projectGroupId;
+      }
+    }
     await clearStore("projectGroups");
     await clearStore("issues");
     await putMany("projectGroups", mergedProjectGroups);
@@ -122,14 +135,16 @@ async function traverseProject(seedRawIssue, jiraBaseUrl, issueMap, warnings) {
     for (const rawIssue of rawIssues) {
       if (!rawIssue?.key || visited.has(rawIssue.key)) continue;
       visited.add(rawIssue.key);
-      projectIssueKeys.add(rawIssue.key);
       rawByKey.set(rawIssue.key, rawIssue);
 
-      if (isRelevantIssue(rawIssue)) {
-        const normalized = normalizeIssue(rawIssue, jiraBaseUrl);
-        issueMap.set(normalized.issueKey, normalized);
-        persistedIssueKeys.add(normalized.issueKey);
+      if (!isRelevantIssue(rawIssue)) {
+        continue;
       }
+
+      projectIssueKeys.add(rawIssue.key);
+      const normalized = normalizeIssue(rawIssue, jiraBaseUrl);
+      issueMap.set(normalized.issueKey, normalized);
+      persistedIssueKeys.add(normalized.issueKey);
 
       for (const neighborKey of getAllNeighborKeys(rawIssue)) {
         if (!visited.has(neighborKey) && !pending.includes(neighborKey)) {

@@ -1,10 +1,21 @@
 export const monitorConfig = {
   jiraRequest: {
-    delayBetweenRequestsMs: 500,
+    delayBetweenRequestsMs: 100,
     maxIssuesPerBatch: 25,
   },
   notifications: {
     unreadReminderIntervalMinutes: 60,
+  },
+  autoSyncSchedule: {
+    weeklyWindows: [
+      { days: [1, 2, 3, 4, 5], start: "08:00", end: "12:00" },
+      { days: [1, 2, 3, 4, 5], start: "13:00", end: "17:30" },
+      { days: [6], start: "07:30", end: "11:30" },
+    ],
+    specificDates: [
+      { month: 1, day: 1, start: "00:00", end: "23:59" },
+      { month: 12, day: 7, start: "00:00", end: "23:59" },
+    ],
   },
   issueTypesToPersist: [
     "Testing",

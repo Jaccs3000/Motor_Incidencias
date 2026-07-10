@@ -15,6 +15,17 @@ import { runSynchronization } from "./services/syncService";
 
 const defaultSettings = {
   syncIntervalMinutes: 5,
+  autoSyncSchedule: {
+    weeklyWindows: [
+      { days: [1, 2, 3, 4, 5], start: "08:00", end: "12:00" },
+      { days: [1, 2, 3, 4, 5], start: "13:00", end: "17:30" },
+      { days: [6], start: "07:30", end: "11:30" },
+    ],
+    specificDates: [
+      { month: 1, day: 1, start: "00:00", end: "23:59" },
+      { month: 12, day: 7, start: "00:00", end: "23:59" },
+    ],
+  },
 };
 
 export default function App() {
@@ -37,6 +48,9 @@ export default function App() {
   const syncingRef = useRef(false);
 
   const hasFilters = filters.length > 0;
+  const autoSyncAllowed = isAutoSyncAllowed(appSettings.autoSyncSchedule, new Date(now));
+  const autoSyncPaused = hasFilters && !autoSyncAllowed && syncStatus !== "syncing";
+  const displayedSyncStatus = autoSyncPaused ? "paused" : syncStatus;
   const syncDisabled = syncingRef.current || !hasFilters;
   const filtersRef = useRef([]);
   const backendStatusRef = useRef(null);
@@ -65,10 +79,14 @@ export default function App() {
   useEffect(() => {
     if (!hasFilters || !nextSyncAt) return undefined;
     const timeout = window.setTimeout(() => {
-      void handleSync();
+      if (isAutoSyncAllowed(appSettings.autoSyncSchedule, new Date())) {
+        void handleSync();
+      } else {
+        setNextSyncAt(Date.now() + 60000);
+      }
     }, Math.max(0, nextSyncAt - Date.now()));
     return () => window.clearTimeout(timeout);
-  }, [hasFilters, nextSyncAt]);
+  }, [hasFilters, nextSyncAt, appSettings.autoSyncSchedule]);
 
   const sortedProjectGroups = useMemo(
     () => [...projectGroups].sort((a, b) => String(a.description).localeCompare(String(b.description))),
@@ -95,7 +113,7 @@ export default function App() {
     try {
       const health = await getHealth();
       setBackendStatus(health);
-      if (storedFilters.length) {
+      if (storedFilters.length && isAutoSyncAllowed((storedSettings || defaultSettings).autoSyncSchedule, new Date())) {
         window.setTimeout(() => {
           void handleSync({ backendStatusOverride: health, filtersOverride: storedFilters });
         }, 0);
@@ -106,7 +124,11 @@ export default function App() {
   }
 
   async function saveSettings() {
-    await setSetting("settings", { syncIntervalMinutes: appSettings.syncIntervalMinutes });
+    const settingsToSave = {
+      syncIntervalMinutes: appSettings.syncIntervalMinutes,
+      autoSyncSchedule: appSettings.autoSyncSchedule || defaultSettings.autoSyncSchedule,
+    };
+    await setSetting("settings", settingsToSave);
     await setSetting("visibleColumns", visibleColumns);
     await clearStore("jiraFilters");
     await putMany("jiraFilters", filters);
@@ -114,7 +136,7 @@ export default function App() {
     await putMany("alertRules", alertRules);
     setSnackbar({ severity: "success", message: "Configuración guardada." });
     if (filters.length) setTab("main");
-    if (filters.length && !syncingRef.current) {
+    if (filters.length && !syncingRef.current && isAutoSyncAllowed(settingsToSave.autoSyncSchedule, new Date())) {
       await handleSync({ filtersOverride: filters });
     }
   }
@@ -162,6 +184,7 @@ export default function App() {
 
   function formatCountdown(targetTime) {
     if (!targetTime || !hasFilters) return "";
+    if (!autoSyncAllowed) return "Pausada";
     const remainingMs = Math.max(0, targetTime - now);
     const totalSeconds = Math.ceil(remainingMs / 1000);
     const hours = Math.floor(totalSeconds / 3600);
@@ -172,6 +195,31 @@ export default function App() {
     if (hours || minutes) parts.push(`${minutes}m`);
     parts.push(`${seconds}s`);
     return parts.join(" ");
+  }
+
+  function isAutoSyncAllowed(schedule, date) {
+    const weeklyWindows = schedule?.weeklyWindows || [];
+    const specificDates = schedule?.specificDates || [];
+    if (!weeklyWindows.length && !specificDates.length) return true;
+    return specificDates.some((window) => matchesSpecificDate(window, date)) || weeklyWindows.some((window) => matchesWeeklyWindow(window, date));
+  }
+
+  function matchesSpecificDate(window, date) {
+    return Number(window.month) === date.getMonth() + 1 && Number(window.day) === date.getDate() && isWithinTimeRange(window.start, window.end, date);
+  }
+
+  function matchesWeeklyWindow(window, date) {
+    return (window.days || []).map(Number).includes(date.getDay()) && isWithinTimeRange(window.start, window.end, date);
+  }
+
+  function isWithinTimeRange(start, end, date) {
+    const current = date.getHours() * 60 + date.getMinutes();
+    return current >= toMinutes(start || "00:00") && current <= toMinutes(end || "23:59");
+  }
+
+  function toMinutes(value) {
+    const [hours = "0", minutes = "0"] = String(value).split(":");
+    return Number(hours) * 60 + Number(minutes);
   }
 
   async function selectIssue(issueKey) {
@@ -190,13 +238,13 @@ export default function App() {
             Monitor de Incidencias Jira
           </Typography>
           <NotificationBell notifications={notifications} onChanged={refreshData} />
-          <SyncStatus status={syncStatus} lastAttemptAt={lastAttemptAt} message={syncProgress || syncMessage} />
+          <SyncStatus status={displayedSyncStatus} lastAttemptAt={lastAttemptAt} message={autoSyncPaused ? "Fuera del horario configurado" : syncProgress || syncMessage} />
           <Stack alignItems="center" spacing={0.25}>
             <Button variant="contained" startIcon={<RefreshCw size={17} />} disabled={syncDisabled} onClick={handleSync}>
               Sincronizar
             </Button>
             <Typography variant="caption" color="text.secondary">
-              {syncingRef.current ? "Sincronizando..." : hasFilters ? `Auto sync en ${formatCountdown(nextSyncAt)}` : "Sin auto sync"}
+              {syncingRef.current ? "Sincronizando..." : hasFilters ? (autoSyncAllowed ? `Auto sync en ${formatCountdown(nextSyncAt)}` : "Auto sync pausada") : "Sin auto sync"}
             </Typography>
           </Stack>
           <Button variant="outlined" startIcon={<Settings size={17} />} onClick={() => setTab("settings")}>

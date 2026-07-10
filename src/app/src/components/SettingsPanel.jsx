@@ -24,6 +24,23 @@ export function SettingsPanel({
           <Grid size={{ xs: 12, md: 4 }}>
             <TextField fullWidth type="number" label="Intervalo sincronización (min)" value={appSettings.syncIntervalMinutes} onChange={(e) => setAppSettings({ ...appSettings, syncIntervalMinutes: Number(e.target.value) })} />
           </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              multiline
+              minRows={6}
+              label="Horario sincronizacion automatica (JSON)"
+              value={appSettings.autoSyncScheduleText ?? JSON.stringify(appSettings.autoSyncSchedule || defaultAutoSyncSchedule(), null, 2)}
+              onChange={(event) => {
+                try {
+                  setAppSettings({ ...appSettings, autoSyncSchedule: JSON.parse(event.target.value), autoSyncScheduleText: undefined });
+                } catch {
+                  setAppSettings({ ...appSettings, autoSyncScheduleText: event.target.value });
+                }
+              }}
+              helperText="Usa dias 0=domingo, 1=lunes ... 6=sabado. Las fechas especificas usan mes/dia."
+            />
+          </Grid>
         </Grid>
       </Paper>
 
@@ -116,6 +133,20 @@ function emptyFilter() {
 
 function emptyAlert() {
   return { id: crypto.randomUUID(), name: "Nueva alerta", conditions: [{ field: "status", operator: "=", value: "Cerrado", joiner: "AND" }], messageTemplate: "{{issueKey}} cumple la alerta {{status}}", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+}
+
+function defaultAutoSyncSchedule() {
+  return {
+    weeklyWindows: [
+      { days: [1, 2, 3, 4, 5], start: "08:00", end: "12:00" },
+      { days: [1, 2, 3, 4, 5], start: "13:00", end: "17:30" },
+      { days: [6], start: "07:30", end: "11:30" },
+    ],
+    specificDates: [
+      { month: 1, day: 1, start: "00:00", end: "23:59" },
+      { month: 12, day: 7, start: "00:00", end: "23:59" },
+    ],
+  };
 }
 
 function updateAt(items, setter, index, value) {

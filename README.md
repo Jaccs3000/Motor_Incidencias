@@ -49,7 +49,7 @@ http://localhost:8080/api/health
 ```powershell
 cd C:\Monitor_Incidencias\src\app
 npm install
-npm run dev -- --host localhost --port 5173
+npm run dev -- --host localhost --port 5174
 ```
 
 Aplicación:

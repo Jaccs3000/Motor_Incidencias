@@ -6,9 +6,30 @@ import { getAllNeighborKeys, isRelevantIssue, normalizeIssue } from "../utils/ji
 import { buildProjectGroup } from "../utils/projectBuilder";
 import { createNotificationsForIssue, getNotificationsDueToShow, showNativeNotification } from "./notificationService";
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Sincronizacion interrumpida", "AbortError"));
+      return;
+    }
+    const timeout = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        reject(new DOMException("Sincronizacion interrumpida", "AbortError"));
+      },
+      { once: true },
+    );
+  });
 
-export async function runSynchronization({ jiraBaseUrl, onProgress }) {
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw new DOMException("Sincronizacion interrumpida", "AbortError");
+  }
+}
+
+export async function runSynchronization({ jiraBaseUrl, onProgress, signal }) {
   let lock = null;
   const syncStartedAt = new Date().toISOString();
   const warnings = [];
@@ -26,19 +47,22 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
 
     const seedRawIssues = [];
     for (const filter of filters) {
+      throwIfAborted(signal);
       const jql = buildJqlFromFilter(filter);
-      const result = await searchJira(jql);
+      const result = await searchJira(jql, { signal });
       seedRawIssues.push(...(result.issues || []));
-      await sleep(monitorConfig.jiraRequest.delayBetweenRequestsMs);
+      await sleep(monitorConfig.jiraRequest.delayBetweenRequestsMs, signal);
     }
 
     const issueMap = new Map();
     const projectGroups = [];
     const issuesToPersist = new Map();
+    const notificationJobs = [];
     const groupedIssueKeys = new Set();
     const alertRules = await getAll("alertRules");
 
     for (let index = 0; index < seedRawIssues.length; index += 1) {
+      throwIfAborted(signal);
       const seed = seedRawIssues[index];
       if (!seed?.key) {
         warnings.push(`Jira devolvio una incidencia sin key en la posicion ${index + 1}. Revisa los campos retornados por la busqueda.`);
@@ -48,7 +72,7 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
         continue;
       }
       onProgress?.(`Recorriendo proyecto ${index + 1} de ${seedRawIssues.length}...`);
-      const traversal = await traverseProject(seed, jiraBaseUrl, issueMap, warnings);
+      const traversal = await traverseProject(seed, jiraBaseUrl, issueMap, warnings, signal);
       const projectGroup = buildProjectGroup(seed.key, traversal.persistedIssueKeys, issueMap);
       if (!projectGroup.issueKeys.length) {
         warnings.push(`No se encontraron incidencias persistibles para ${seed.key}.`);
@@ -63,7 +87,7 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
         const currentIssue = issueMap.get(issueKey);
         const previousIssue = await get("issues", issueKey);
         currentIssue.projectGroupId = projectGroup.projectGroupId;
-        await createNotificationsForIssue({ alertRules, currentIssue, previousIssue, projectGroup });
+        notificationJobs.push({ alertRules, currentIssue, previousIssue, projectGroup });
         issuesToPersist.set(currentIssue.issueKey, currentIssue);
       }
     }
@@ -75,10 +99,14 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
         if (issue) issue.projectGroupId = projectGroup.projectGroupId;
       }
     }
+    throwIfAborted(signal);
     await clearStore("projectGroups");
     await clearStore("issues");
     await putMany("projectGroups", mergedProjectGroups);
     await putMany("issues", [...issuesToPersist.values()]);
+    for (const job of notificationJobs) {
+      await createNotificationsForIssue(job);
+    }
     await setSetting("lastSyncStatus", warnings.length ? "warning" : "success");
     await setSetting("lastSyncMessage", warnings.length ? warnings.join(" | ") : "Sincronizado correctamente");
     await writeBackendLog("sync", warnings.length ? "WARN" : "INFO", `Sincronizacion finalizada. Proyectos: ${projectGroups.length}. Advertencias: ${warnings.length}`);
@@ -96,6 +124,17 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
       warningCount: warnings.length,
     };
   } catch (error) {
+    if (error.name === "AbortError" || signal?.aborted) {
+      await setSetting("lastSyncStatus", "interrupted");
+      await setSetting("lastSyncMessage", "Sincronizacion Interrumpida");
+      await writeBackendLog("sync", "WARN", "Sincronizacion interrumpida por el usuario");
+      return {
+        status: "interrupted",
+        message: "Sincronizacion Interrumpida",
+        projectCount: 0,
+        warningCount: warnings.length,
+      };
+    }
     await setSetting("lastSyncStatus", "error");
     await setSetting("lastSyncMessage", error.message);
     await writeBackendLog("sync", "ERROR", error.message);
@@ -107,7 +146,7 @@ export async function runSynchronization({ jiraBaseUrl, onProgress }) {
   }
 }
 
-async function traverseProject(seedRawIssue, jiraBaseUrl, issueMap, warnings) {
+async function traverseProject(seedRawIssue, jiraBaseUrl, issueMap, warnings, signal) {
   const visited = new Set();
   const pending = [seedRawIssue.key];
   const rawByKey = new Map([[seedRawIssue.key, seedRawIssue]]);
@@ -115,6 +154,7 @@ async function traverseProject(seedRawIssue, jiraBaseUrl, issueMap, warnings) {
   const persistedIssueKeys = new Set();
 
   while (pending.length) {
+    throwIfAborted(signal);
     const batchKeys = pending.splice(0, monitorConfig.jiraRequest.maxIssuesPerBatch).filter((key) => !visited.has(key));
     if (!batchKeys.length) continue;
 
@@ -123,10 +163,11 @@ async function traverseProject(seedRawIssue, jiraBaseUrl, issueMap, warnings) {
 
     if (missingKeys.length) {
       try {
-        const response = await fetchIssuesByKeys(missingKeys);
+        const response = await fetchIssuesByKeys(missingKeys, { signal });
         rawIssues.push(...(response.issues || []));
-        await sleep(monitorConfig.jiraRequest.delayBetweenRequestsMs);
+        await sleep(monitorConfig.jiraRequest.delayBetweenRequestsMs, signal);
       } catch (error) {
+        if (error.name === "AbortError" || signal?.aborted) throw error;
         warnings.push(`No se pudieron consultar incidencias: ${missingKeys.join(", ")}`);
         continue;
       }

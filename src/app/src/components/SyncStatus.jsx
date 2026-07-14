@@ -6,6 +6,7 @@ const statusConfig = {
   warning: { color: "warning", label: "Sincronización con advertencias", icon: TriangleAlert },
   error: { color: "error", label: "Error de sincronización", icon: AlertCircle },
   syncing: { color: "info", label: "Sincronizando...", icon: Loader2 },
+  interrupted: { color: "warning", label: "Sincronización Interrumpida", icon: TriangleAlert },
   paused: { color: "warning", label: "Sincronizacion Pausada", icon: TriangleAlert },
   idle: { color: "default", label: "Sin sincronizar", icon: AlertCircle },
 };

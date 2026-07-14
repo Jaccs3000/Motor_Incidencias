@@ -8,7 +8,7 @@ export const monitorConfig = {
   },
   autoSyncSchedule: {
     weeklyWindows: [
-      { days: [1, 2, 3, 4, 5], start: "08:00", end: "12:00" },
+      { days: [1, 2, 3, 4, 5], start: "09:00", end: "12:00" },
       { days: [1, 2, 3, 4, 5], start: "13:00", end: "17:30" },
       { days: [6], start: "07:30", end: "11:30" },
     ],

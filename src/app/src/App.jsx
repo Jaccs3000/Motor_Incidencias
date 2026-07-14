@@ -1,5 +1,5 @@
 import { Alert, AppBar, Box, Button, Container, Snackbar, Stack, Tab, Tabs, Toolbar, Typography } from "@mui/material";
-import { RefreshCw, Settings } from "lucide-react";
+import { RefreshCw, Settings, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./index.css";
 import { getHealth } from "./api/backendApi";
@@ -35,6 +35,7 @@ export default function App() {
   const [backendStatus, setBackendStatus] = useState(null);
   const [snackbar, setSnackbar] = useState(null);
   const syncingRef = useRef(false);
+  const syncAbortControllerRef = useRef(null);
   const autoSyncSchedule = monitorConfig.autoSyncSchedule;
 
   const hasFilters = filters.length > 0;
@@ -141,6 +142,8 @@ export default function App() {
   async function handleSync({ backendStatusOverride = null, filtersOverride = null } = {}) {
     if (syncingRef.current) return;
     const activeFilters = filtersOverride || filtersRef.current;
+    const abortController = new AbortController();
+    syncAbortControllerRef.current = abortController;
     syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncMessage("Sincronizando...");
@@ -150,21 +153,32 @@ export default function App() {
       const result = await runSynchronization({
         jiraBaseUrl: (backendStatusOverride || backendStatusRef.current)?.jira?.baseUrl || "",
         onProgress: setSyncProgress,
+        signal: abortController.signal,
       });
       setSyncStatus(result.status);
       setSyncMessage(result.message);
-      setSnackbar({ severity: result.status === "warning" ? "warning" : "success", message: result.message });
+      setSnackbar({ severity: result.status === "warning" || result.status === "interrupted" ? "warning" : "success", message: result.message });
     } catch (error) {
       setSyncStatus("error");
       setSyncMessage(error.message);
       setSnackbar({ severity: "error", message: error.message });
     } finally {
       syncingRef.current = false;
+      syncAbortControllerRef.current = null;
       setSyncProgress("");
       setSelectedIssue(null);
       setNextSyncAt(activeFilters.length ? Date.now() + syncIntervalMs() : null);
       await refreshData();
     }
+  }
+
+  function stopSync() {
+    if (!syncingRef.current) return;
+    syncAbortControllerRef.current?.abort();
+    setSyncStatus("interrupted");
+    setSyncMessage("Sincronizacion Interrumpida");
+    setSyncProgress("Deteniendo sincronizacion...");
+    setNextSyncAt(filtersRef.current.length ? Date.now() + syncIntervalMs() : null);
   }
 
   function syncIntervalMs() {
@@ -229,8 +243,14 @@ export default function App() {
           <NotificationBell notifications={notifications} onChanged={refreshData} />
           <SyncStatus status={displayedSyncStatus} lastAttemptAt={lastAttemptAt} message={autoSyncPaused ? "Fuera del horario configurado" : syncProgress || syncMessage} />
           <Stack alignItems="center" spacing={0.25}>
-            <Button variant="contained" startIcon={<RefreshCw size={17} />} disabled={syncDisabled} onClick={handleSync}>
-              Sincronizar
+            <Button
+              variant="contained"
+              color={syncingRef.current ? "warning" : "primary"}
+              startIcon={syncingRef.current ? <Square size={17} /> : <RefreshCw size={17} />}
+              disabled={!syncingRef.current && syncDisabled}
+              onClick={syncingRef.current ? stopSync : handleSync}
+            >
+              {syncingRef.current ? "Detener Sincronización" : "Sincronizar"}
             </Button>
             <Typography variant="caption" color="text.secondary">
               {syncingRef.current ? "Sincronizando..." : hasFilters ? (autoSyncAllowed ? `Auto sync en ${formatCountdown(nextSyncAt)}` : "Auto sync pausada") : "Sin auto sync"}
@@ -269,10 +289,10 @@ export default function App() {
               onSave={saveSettings}
             />
           ) : (
-            <Stack spacing={2}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2, height: "calc(100vh - 190px)", minHeight: 520 }}>
               <ProjectGrid projectGroups={sortedProjectGroups} visibleColumns={visibleColumns} onIssueClick={selectIssue} />
               <IssueDetail issue={selectedIssue} onClose={() => setSelectedIssue(null)} />
-            </Stack>
+            </Box>
           )}
         </Stack>
       </Container>

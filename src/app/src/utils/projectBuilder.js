@@ -54,12 +54,16 @@ function time(issue, key) {
   return Number(issue?.attributes?.[key] || 0);
 }
 
-function sumTime(issues, key) {
-  return issues.reduce((total, issue) => total + time(issue, key), 0);
+function times(issues, key) {
+  return issues.map((issue) => hours(time(issue, key)));
 }
 
 function owner(issue) {
   return issue?.attributes.assignee || "";
+}
+
+function developer(issue) {
+  return issue?.attributes.developer || issue?.attributes.creator || "";
 }
 
 function status(issue) {
@@ -72,6 +76,10 @@ function keys(issues) {
 
 function owners(issues, fallback = "") {
   return issues.map((issue) => owner(issue) || fallback);
+}
+
+function developers(issues, fallback = "") {
+  return issues.map((issue) => developer(issue) || fallback);
 }
 
 function statuses(issues) {
@@ -131,19 +139,19 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
     generalStatus: generalStatus || testing?.status || issues[0]?.status || "",
     testingIssue: keys(testings),
     testOwner: owners(testings),
-    developer: testing?.attributes.developer || testing?.attributes.creator || "",
-    plannedTimeHours: hours(sumTime(testings, "timeOriginalEstimate")),
-    spentTimeHours: hours(sumTime(testings, "timeSpent")),
-    remainingTimeHours: hours(sumTime(testings, "timeRemainingEstimate")),
+    developer: developers(testings),
+    plannedTimeHours: times(testings, "timeOriginalEstimate"),
+    spentTimeHours: times(testings, "timeSpent"),
+    remainingTimeHours: times(testings, "timeRemainingEstimate"),
     criteriaTestingIssue: keys(criteriaTestings),
     criteriaTestingOwner: owners(criteriaTestings, "Sin asignar"),
     criteriaTestingStatus: statuses(criteriaTestings),
     criteriaDocIssue: keys(criteriaDocs),
     criteriaDocStatus: statuses(criteriaDocs),
     criteriaOwner: criteriaDocs.map((issue) => owner(issue) || issue?.attributes.criteriaResponsible || ""),
-    criteriaPlannedTimeHours: hours(sumTime(criteriaDocs, "timeOriginalEstimate")),
-    criteriaSpentTimeHours: hours(sumTime(criteriaDocs, "timeSpent")),
-    criteriaRemainingTimeHours: hours(sumTime(criteriaDocs, "timeRemainingEstimate")),
+    criteriaPlannedTimeHours: times(criteriaDocs, "timeOriginalEstimate"),
+    criteriaSpentTimeHours: times(criteriaDocs, "timeSpent"),
+    criteriaRemainingTimeHours: times(criteriaDocs, "timeRemainingEstimate"),
     corrections,
     automationIssue: keys(automations),
     automationOwner: owners(automations, "Sin asignar"),

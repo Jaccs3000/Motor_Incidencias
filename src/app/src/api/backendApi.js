@@ -10,13 +10,13 @@ export async function getHealth() {
   return data;
 }
 
-export async function searchJira(jql) {
-  const { data } = await api.post("/jira/search", { jql });
+export async function searchJira(jql, options = {}) {
+  const { data } = await api.post("/jira/search", { jql }, { signal: options.signal });
   return data;
 }
 
-export async function fetchIssuesByKeys(issueKeys) {
-  const { data } = await api.post("/jira/issues", { issueKeys });
+export async function fetchIssuesByKeys(issueKeys, options = {}) {
+  const { data } = await api.post("/jira/issues", { issueKeys }, { signal: options.signal });
   return data;
 }
 

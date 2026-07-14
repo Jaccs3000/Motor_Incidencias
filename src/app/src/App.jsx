@@ -189,12 +189,18 @@ export default function App() {
       testingIssue: "testing",
       testOwner: "testing",
       developer: "testing",
+      plannedTimeHours: "testing",
+      spentTimeHours: "testing",
+      remainingTimeHours: "testing",
       criteriaTestingIssue: "criteriaTesting",
       criteriaTestingOwner: "criteriaTesting",
       criteriaTestingStatus: "criteriaTesting",
       criteriaDocIssue: "criteriaDoc",
       criteriaDocStatus: "criteriaDoc",
       criteriaOwner: "criteriaDoc",
+      criteriaPlannedTimeHours: "criteriaDoc",
+      criteriaSpentTimeHours: "criteriaDoc",
+      criteriaRemainingTimeHours: "criteriaDoc",
       automationIssue: "automation",
       automationOwner: "automation",
       automationStatus: "automation",
@@ -330,6 +336,13 @@ export default function App() {
     setGridScrollRequest({ projectGroupId, position, id: Date.now() });
   }
 
+  function changeTab(value) {
+    if (value === "settings") {
+      setGridScrollRequest(null);
+    }
+    setTab(value);
+  }
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f5f7fa" }}>
       <AppBar position="sticky" color="inherit" elevation={1}>
@@ -353,7 +366,7 @@ export default function App() {
               {syncingRef.current ? "Sincronizando..." : hasFilters ? (autoSyncAllowed ? `Auto sync en ${formatCountdown(nextSyncAt)}` : "Auto sync pausada") : "Sin auto sync"}
             </Typography>
           </Stack>
-          <Button variant="outlined" startIcon={<Settings size={17} />} onClick={() => setTab("settings")}>
+          <Button variant="outlined" startIcon={<Settings size={17} />} onClick={() => changeTab("settings")}>
             Configuración
           </Button>
         </Toolbar>
@@ -368,7 +381,7 @@ export default function App() {
             <Alert severity="warning">Jira no está configurado en el backend. Completa `config/application-local.yml` antes de probar contra Jira real.</Alert>
           ) : null}
 
-          <Tabs value={tab} onChange={(_, value) => setTab(value)}>
+          <Tabs value={tab} onChange={(_, value) => changeTab(value)}>
             <Tab value="main" label="Principal" />
             <Tab value="settings" label="Configuración" />
           </Tabs>

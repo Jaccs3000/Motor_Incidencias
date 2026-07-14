@@ -58,6 +58,23 @@ function times(issues, key) {
   return issues.map((issue) => hours(time(issue, key)));
 }
 
+function timeProgress(issue) {
+  const planned = hours(time(issue, "timeOriginalEstimate"));
+  const spent = hours(time(issue, "timeSpent"));
+  const jiraRemaining = hours(time(issue, "timeRemainingEstimate"));
+  const remaining = planned ? planned - spent : jiraRemaining;
+  if (!planned && !spent && !remaining) return null;
+  const percentageBase = planned || spent + remaining;
+  const percent = percentageBase ? Math.round((spent / percentageBase) * 100) : 0;
+  return {
+    planned,
+    spent,
+    remaining,
+    percent,
+    spentPercent: Math.min(100, Math.max(0, percent)),
+  };
+}
+
 function owner(issue) {
   return issue?.attributes.assignee || "";
 }
@@ -91,6 +108,15 @@ function issueSummaries(issues, ownerFallback = "") {
     issueKey: issue.issueKey,
     status: status(issue),
     owner: owner(issue) || ownerFallback,
+  }));
+}
+
+function issueSummariesWithTime(issues, ownerFallback = "") {
+  return issues.map((issue) => ({
+    issueKey: issue.issueKey,
+    status: status(issue),
+    owner: owner(issue) || ownerFallback,
+    timeProgress: timeProgress(issue),
   }));
 }
 
@@ -173,6 +199,7 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
       issueKey: issue.issueKey,
       status: status(issue),
       owner: developer(issue) || owner(issue),
+      timeProgress: timeProgress(issue),
     })),
     testOwner: owners(testings),
     developer: developers(testings),
@@ -188,6 +215,7 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
       issueKey: issue.issueKey,
       status: status(issue),
       owner: owner(issue) || issue?.attributes.criteriaResponsible || "",
+      timeProgress: timeProgress(issue),
     })),
     criteriaDocStatus: statuses(criteriaDocs),
     criteriaOwner: criteriaDocs.map((issue) => owner(issue) || issue?.attributes.criteriaResponsible || ""),
@@ -238,7 +266,7 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
     infrastructureOwner: owners(infrastructures),
     infrastructureStatus: statuses(infrastructures),
     preProdTestingIssue: keys(preProdTestings),
-    preProdTesting: issueSummaries(preProdTestings, "Sin asignar"),
+    preProdTesting: issueSummariesWithTime(preProdTestings, "Sin asignar"),
     preProdTestingOwner: owners(preProdTestings, "Sin asignar"),
     preProdTestingStatus: statuses(preProdTestings),
     preProdCriteriaTestingIssue: keys(preProdCriteriaTestings),

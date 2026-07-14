@@ -1,10 +1,11 @@
 import { Box, Button, IconButton, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography } from "@mui/material";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, Hourglass } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { gridColumnDefinitions } from "../config/monitorConfig";
 
 export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick, onSubtasksClick, scrollRequest }) {
-  const columns = gridColumnDefinitions.filter((column) => visibleColumns.includes(column.key));
+  const definitions = new Map(gridColumnDefinitions.map((column) => [column.key, column]));
+  const columns = visibleColumns.map((key) => definitions.get(key)).filter(Boolean);
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const containerRef = useRef(null);
   const rowRefs = useRef(new Map());
@@ -28,7 +29,7 @@ export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick, onSub
       scrollRequest.position === "bottom"
         ? rowTop - container.clientHeight + row.offsetHeight
         : rowTop;
-    container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+    container.scrollTo({ top: Math.max(0, target), left: container.scrollLeft, behavior: "smooth" });
   }, [scrollRequest]);
 
   if (!projectGroups.length) {
@@ -172,8 +173,60 @@ function IssueSummaryValue({ item, onIssueClick, onSubtasksClick }) {
         ) : null}
       </Box>
       <Box>{abbreviatePersonName(item?.owner || "Sin asignar")}</Box>
+      <TimeProgressBar progress={item?.timeProgress} />
     </Box>
   );
+}
+
+function TimeProgressBar({ progress }) {
+  if (!progress) return null;
+  const tone = progress.percent > 100
+    ? "from-rose-500 to-red-700"
+    : progress.percent >= 80
+      ? "from-violet-500 to-purple-700"
+      : progress.percent >= 55
+        ? "from-indigo-500 to-violet-600"
+        : progress.percent >= 30
+          ? "from-sky-500 to-blue-600"
+          : "from-cyan-300 to-sky-400";
+  const percentTextClass = "text-slate-900";
+  const title = (
+    <div className="space-y-0.5">
+      <div>Tiempo planeado: {formatHours(progress.planned)}</div>
+      <div>Tiempo registrado: {formatHours(progress.spent)}</div>
+      <div>Tiempo restante: {formatHours(progress.remaining)}</div>
+      <div>Avance: {progress.percent}%</div>
+    </div>
+  );
+
+  return (
+    <Tooltip title={title} arrow>
+      <div className="mt-1 flex w-[156px] items-center gap-1.5">
+        <div className="flex min-w-[29px] items-center gap-0.5 leading-none">
+          <Hourglass size={12} className="text-amber-500" />
+          <span className="text-[10px] font-bold text-slate-800">{formatHours(progress.remaining)}</span>
+        </div>
+        <div className="relative h-5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100 shadow-inner ring-1 ring-slate-200">
+          <div className={`h-full rounded-full bg-gradient-to-r ${tone} shadow-sm`} style={{ width: `${progress.spentPercent}%` }} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className={`rounded-full bg-white/85 px-1.5 py-[1px] text-[10px] font-black leading-none ${percentTextClass} shadow-sm ring-1 ring-slate-900/10 backdrop-blur-sm`}>
+              {progress.percent}%
+            </span>
+          </div>
+        </div>
+        <div className="flex min-w-[25px] justify-end leading-none">
+          <span className="text-[10px] font-bold text-slate-800">{formatHours(progress.planned)}</span>
+        </div>
+      </div>
+    </Tooltip>
+  );
+}
+
+function formatHours(value) {
+  const numericValue = Number(value || 0);
+  if (!numericValue) return "0 h";
+  const rounded = Math.round(numericValue * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)} h`;
 }
 
 function formatValue(value, column) {

@@ -15,6 +15,7 @@ export function SettingsPanel({
 }) {
   const addFilter = () => setFilters([...filters, emptyFilter()]);
   const addAlert = () => setAlertRules([...alertRules, emptyAlert()]);
+  const orderedGridColumns = orderGridColumns(visibleColumns);
 
   return (
     <Stack spacing={2}>
@@ -88,19 +89,22 @@ export function SettingsPanel({
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Typography variant="h6">Columnas del grid</Typography>
         <Grid container spacing={1} sx={{ mt: 1 }}>
-          {gridColumnDefinitions.map((column) => (
+          {orderedGridColumns.map((column) => {
+            const checked = visibleColumns.includes(column.key);
+            return (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={column.key}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <IconButton size="small" disabled={!checked} onClick={() => moveColumn(column.key, -1, visibleColumns, setVisibleColumns)}><ArrowUp size={16} /></IconButton>
+                <IconButton size="small" disabled={!checked} onClick={() => moveColumn(column.key, 1, visibleColumns, setVisibleColumns)}><ArrowDown size={16} /></IconButton>
                 <FormControlLabel
-                  control={<Checkbox checked={visibleColumns.includes(column.key)} onChange={(event) => toggleColumn(column.key, event.target.checked, visibleColumns, setVisibleColumns)} />}
+                  control={<Checkbox checked={checked} onChange={(event) => toggleColumn(column.key, event.target.checked, visibleColumns, setVisibleColumns)} />}
                   label={column.label}
                   sx={{ flex: 1 }}
                 />
-                <IconButton size="small" onClick={() => moveColumn(column.key, -1, visibleColumns, setVisibleColumns)}><ArrowUp size={16} /></IconButton>
-                <IconButton size="small" onClick={() => moveColumn(column.key, 1, visibleColumns, setVisibleColumns)}><ArrowDown size={16} /></IconButton>
               </Box>
             </Grid>
-          ))}
+            );
+          })}
         </Grid>
       </Paper>
 
@@ -126,6 +130,13 @@ function updateAlertCondition(items, setter, index, key, value) {
   const alert = items[index];
   const condition = { ...(alert.conditions[0] || {}), [key]: value };
   updateAt(items, setter, index, { ...alert, conditions: [condition] });
+}
+
+function orderGridColumns(visibleColumns) {
+  const definitions = new Map(gridColumnDefinitions.map((column) => [column.key, column]));
+  const visible = visibleColumns.map((key) => definitions.get(key)).filter(Boolean);
+  const hidden = gridColumnDefinitions.filter((column) => !visibleColumns.includes(column.key));
+  return [...visible, ...hidden];
 }
 
 function toggleColumn(key, checked, visibleColumns, setVisibleColumns) {

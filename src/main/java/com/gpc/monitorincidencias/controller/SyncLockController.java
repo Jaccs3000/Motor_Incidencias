@@ -54,6 +54,13 @@ public class SyncLockController {
         return Map.of("ok", true);
     }
 
+    @PostMapping("/refresh")
+    public Map<String, Object> refresh(@Valid @RequestBody ReleaseRequest request) {
+        logService.info("sync", "Refresh requested id=" + request.lockId());
+        syncLockService.refresh(request.lockId());
+        return Map.of("ok", true);
+    }
+
     public record LockRequest(String owner) {
     }
 

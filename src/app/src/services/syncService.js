@@ -1,4 +1,4 @@
-import { acquireSyncLock, fetchIssuesByKeys, releaseSyncLock, searchJira, writeBackendLog } from "../api/backendApi";
+import { acquireSyncLock, fetchIssuesByKeys, refreshSyncLock, releaseSyncLock, searchJira, writeBackendLog } from "../api/backendApi";
 import { monitorConfig } from "../config/monitorConfig";
 import { clearStore, get, getAll, putMany, setSetting } from "../db/database";
 import { buildJqlFromFilter } from "../utils/filters";
@@ -31,11 +31,15 @@ function throwIfAborted(signal) {
 
 export async function runSynchronization({ jiraBaseUrl, onProgress, signal }) {
   let lock = null;
+  let lockHeartbeat = null;
   const syncStartedAt = new Date().toISOString();
   const warnings = [];
 
   try {
     lock = await acquireSyncLock("monitor-incidencias-frontend");
+    lockHeartbeat = window.setInterval(() => {
+      refreshSyncLock(lock.id).catch((error) => writeBackendLog("sync", "WARN", `No se pudo renovar el lock: ${error.message}`));
+    }, 30000);
     onProgress?.("Ejecutando filtros Jira...");
     await setSetting("lastSyncAttemptAt", syncStartedAt);
     await setSetting("lastSyncStatus", "syncing");
@@ -140,6 +144,9 @@ export async function runSynchronization({ jiraBaseUrl, onProgress, signal }) {
     await writeBackendLog("sync", "ERROR", error.message);
     throw error;
   } finally {
+    if (lockHeartbeat) {
+      window.clearInterval(lockHeartbeat);
+    }
     if (lock?.id) {
       await releaseSyncLock(lock.id);
     }

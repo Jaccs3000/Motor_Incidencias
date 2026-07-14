@@ -1,11 +1,43 @@
 import { Button, Grid, Link, Paper, Stack, Typography } from "@mui/material";
 import { ExternalLink, X } from "lucide-react";
 
-export function IssueDetail({ issue, onClose }) {
-  if (!issue) {
+export function IssueDetail({ issue, subtasks, onClose }) {
+  if (!issue && !subtasks) {
     return (
       <Paper variant="outlined" sx={{ p: 2, flexShrink: 0 }}>
         <Typography color="text.secondary">Selecciona una incidencia del grid para ver su detalle.</Typography>
+      </Paper>
+    );
+  }
+
+  if (subtasks) {
+    return (
+      <Paper variant="outlined" sx={{ p: 2, flexShrink: 0 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+          <div>
+            <Typography variant="h6">Subtareas de {subtasks.issueKey}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {subtasks.status || ""}{subtasks.progress ? ` - ${subtasks.progress}` : ""}
+            </Typography>
+          </div>
+          <Button variant="outlined" startIcon={<X size={17} />} onClick={onClose}>
+            Ocultar
+          </Button>
+        </Stack>
+        <Grid container spacing={1.25} sx={{ mt: 1 }}>
+          {(subtasks.subtasks || []).map((subtask) => (
+            <Grid size={{ xs: 12, md: 6, xl: 4 }} key={subtask.issueKey}>
+              <Paper variant="outlined" sx={{ p: 1, height: "100%" }}>
+                <Typography variant="subtitle2">{subtask.issueKey}</Typography>
+                <Typography variant="body2">{subtask.status || ""}</Typography>
+                <Typography variant="body2">{subtask.owner || ""}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>
+                  {subtask.description || ""}
+                </Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
       </Paper>
     );
   }
@@ -53,7 +85,7 @@ export function IssueDetail({ issue, onClose }) {
         {details.map(([label, value]) => (
           <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={label}>
             <Typography variant="caption" color="text.secondary">{label}</Typography>
-            <Typography variant="body2" sx={{ wordBreak: "break-word" }}>{value || "Sin dato"}</Typography>
+            <Typography variant="body2" sx={{ wordBreak: "break-word" }}>{value || ""}</Typography>
           </Grid>
         ))}
         <Grid size={{ xs: 12 }}>
@@ -90,7 +122,7 @@ function formatDuration(secondsValue) {
 
 function Description({ value }) {
   const parts = extractTextParts(value);
-  if (!parts.length) return "Sin dato";
+  if (!parts.length) return "";
   return parts.map((part, index) =>
     part.url ? (
       <Link key={`${part.text}-${index}`} href={part.url} target="_blank" rel="noreferrer" sx={{ mr: 0.5 }}>

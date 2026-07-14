@@ -1,11 +1,13 @@
 import { Box, Button, IconButton, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography } from "@mui/material";
 import { ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { gridColumnDefinitions } from "../config/monitorConfig";
 
-export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick }) {
+export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick, onSubtasksClick, scrollRequest }) {
   const columns = gridColumnDefinitions.filter((column) => visibleColumns.includes(column.key));
   const [expandedRows, setExpandedRows] = useState(() => new Set());
+  const containerRef = useRef(null);
+  const rowRefs = useRef(new Map());
 
   const toggleRow = (projectGroupId, expanded) => {
     setExpandedRows((current) => {
@@ -16,6 +18,19 @@ export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick }) {
     });
   };
 
+  useEffect(() => {
+    if (!scrollRequest?.projectGroupId) return;
+    const container = containerRef.current;
+    const row = rowRefs.current.get(scrollRequest.projectGroupId);
+    if (!container || !row) return;
+    const rowTop = row.offsetTop;
+    const target =
+      scrollRequest.position === "bottom"
+        ? rowTop - container.clientHeight + row.offsetHeight
+        : rowTop;
+    container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+  }, [scrollRequest]);
+
   if (!projectGroups.length) {
     return (
       <Paper variant="outlined" sx={{ p: 3 }}>
@@ -25,7 +40,7 @@ export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick }) {
   }
 
   return (
-    <TableContainer component={Paper} variant="outlined" sx={{ flex: 1, minHeight: 260, overflow: "auto" }}>
+    <TableContainer ref={containerRef} component={Paper} variant="outlined" sx={{ flex: 1, minHeight: 260, overflow: "auto" }}>
       <Table size="small" stickyHeader sx={{ minWidth: "100%", width: "max-content" }}>
         <TableHead>
           <TableRow>
@@ -38,7 +53,14 @@ export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick }) {
           {projectGroups.map((group) => {
             const isExpanded = expandedRows.has(group.projectGroupId);
             return (
-              <TableRow key={group.projectGroupId} hover>
+              <TableRow
+                key={group.projectGroupId}
+                hover
+                ref={(element) => {
+                  if (element) rowRefs.current.set(group.projectGroupId, element);
+                  else rowRefs.current.delete(group.projectGroupId);
+                }}
+              >
                 {columns.map((column) => {
                   const value = group.computedFields?.[column.key] ?? "";
                   return (
@@ -49,7 +71,8 @@ export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick }) {
                         expanded={isExpanded}
                         onExpand={() => toggleRow(group.projectGroupId, true)}
                         onCollapse={() => toggleRow(group.projectGroupId, false)}
-                        onIssueClick={onIssueClick}
+                        onIssueClick={(issueKey) => onIssueClick(issueKey, group.projectGroupId)}
+                        onSubtasksClick={(item) => onSubtasksClick(item, group.projectGroupId)}
                       />
                     </TableCell>
                   );
@@ -63,7 +86,7 @@ export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick }) {
   );
 }
 
-function CellValue({ value, column, expanded, onExpand, onCollapse, onIssueClick }) {
+function CellValue({ value, column, expanded, onExpand, onCollapse, onIssueClick, onSubtasksClick }) {
   const values = Array.isArray(value) ? value : [value];
   const filteredValues = values.filter((item) => item !== "" && item != null);
 
@@ -75,9 +98,9 @@ function CellValue({ value, column, expanded, onExpand, onCollapse, onIssueClick
   return (
     <Box sx={{ minHeight: 30, whiteSpace: "nowrap" }}>
       {visibleValues.map((item, index) => (
-        <Box key={`${item}-${index}`} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30, whiteSpace: "nowrap" }}>
+        <Box key={`${item?.issueKey || item}-${index}`} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30, whiteSpace: "nowrap" }}>
           <Box component="span" sx={{ whiteSpace: "nowrap" }}>
-            <SingleValue item={item} column={column} onIssueClick={onIssueClick} />
+            <SingleValue item={item} column={column} onIssueClick={onIssueClick} onSubtasksClick={onSubtasksClick} />
           </Box>
           {!expanded && index === 0 && hiddenCount > 0 ? (
             <Button size="small" variant="text" onClick={onExpand} sx={{ minWidth: 0, px: 0.5, whiteSpace: "nowrap" }}>
@@ -95,7 +118,10 @@ function CellValue({ value, column, expanded, onExpand, onCollapse, onIssueClick
   );
 }
 
-function SingleValue({ item, column, onIssueClick }) {
+function SingleValue({ item, column, onIssueClick, onSubtasksClick }) {
+  if (column.type === "issueSummary") {
+    return <IssueSummaryValue item={item} onIssueClick={onIssueClick} onSubtasksClick={onSubtasksClick} />;
+  }
   if (column.type === "issueKey") {
     return (
       <Button size="small" variant="text" onClick={() => onIssueClick(item)} sx={{ minWidth: 0, px: 0.5, whiteSpace: "nowrap" }}>
@@ -125,6 +151,29 @@ function SingleValue({ item, column, onIssueClick }) {
     );
   }
   return formatValue(item, column);
+}
+
+function IssueSummaryValue({ item, onIssueClick, onSubtasksClick }) {
+  const issueKey = item?.issueKey || "";
+  return (
+    <Box sx={{ lineHeight: 1.25, whiteSpace: "nowrap" }}>
+      <Box sx={{ fontWeight: 700 }}>
+        <Button size="small" variant="text" disabled={!issueKey} onClick={() => onIssueClick(issueKey)} sx={{ minWidth: 0, px: 0, mr: 0.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+          {issueKey}
+        </Button>
+        {item?.status ? ` - ${item.status}` : ""}
+        {item?.subtaskProgress ? (
+          <>
+            {" - "}
+            <Button size="small" variant="text" onClick={() => onSubtasksClick?.(item)} sx={{ minWidth: 0, px: 0, fontWeight: 700, whiteSpace: "nowrap" }}>
+              {item.subtaskProgress}
+            </Button>
+          </>
+        ) : null}
+      </Box>
+      <Box>{abbreviatePersonName(item?.owner || "Sin asignar")}</Box>
+    </Box>
+  );
 }
 
 function formatValue(value, column) {

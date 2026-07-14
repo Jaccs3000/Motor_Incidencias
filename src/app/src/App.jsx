@@ -8,7 +8,7 @@ import { NotificationBell } from "./components/NotificationBell";
 import { ProjectGrid } from "./components/ProjectGrid";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SyncStatus } from "./components/SyncStatus";
-import { monitorConfig } from "./config/monitorConfig";
+import { gridColumnDefinitions, monitorConfig } from "./config/monitorConfig";
 import { clearStore, get, getAll, getSetting, putMany, setSetting } from "./db/database";
 import { getUnreadNotifications } from "./services/notificationService";
 import { runSynchronization } from "./services/syncService";
@@ -25,6 +25,8 @@ export default function App() {
   const [visibleColumns, setVisibleColumns] = useState(monitorConfig.defaultGridColumns);
   const [projectGroups, setProjectGroups] = useState([]);
   const [selectedIssue, setSelectedIssue] = useState(null);
+  const [selectedSubtasks, setSelectedSubtasks] = useState(null);
+  const [gridScrollRequest, setGridScrollRequest] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [syncStatus, setSyncStatus] = useState("idle");
   const [syncMessage, setSyncMessage] = useState("");
@@ -36,6 +38,8 @@ export default function App() {
   const [snackbar, setSnackbar] = useState(null);
   const syncingRef = useRef(false);
   const syncAbortControllerRef = useRef(null);
+  const appSettingsRef = useRef(defaultSettings);
+  const lastClickedGroupIdRef = useRef(null);
   const autoSyncSchedule = monitorConfig.autoSyncSchedule;
 
   const hasFilters = filters.length > 0;
@@ -53,6 +57,10 @@ export default function App() {
   useEffect(() => {
     filtersRef.current = filters;
   }, [filters]);
+
+  useEffect(() => {
+    appSettingsRef.current = appSettings;
+  }, [appSettings]);
 
   useEffect(() => {
     backendStatusRef.current = backendStatus;
@@ -86,11 +94,13 @@ export default function App() {
 
   async function initialize() {
     const storedSettings = await getSetting("settings", defaultSettings);
-    const storedColumns = await getSetting("visibleColumns", monitorConfig.defaultGridColumns);
+    const mergedSettings = { ...defaultSettings, ...storedSettings };
+    const storedColumns = normalizeVisibleColumns(await getSetting("visibleColumns", monitorConfig.defaultGridColumns));
     const storedLastAttempt = await getSetting("lastSyncAttemptAt", null);
     const storedLastStatus = await getSetting("lastSyncStatus", "idle");
     const storedLastMessage = await getSetting("lastSyncMessage", "");
-    setAppSettings({ ...defaultSettings, ...storedSettings });
+    appSettingsRef.current = mergedSettings;
+    setAppSettings(mergedSettings);
     const storedFilters = await getAll("jiraFilters");
     setFilters(storedFilters);
     setAlertRules(await getAll("alertRules"));
@@ -118,6 +128,7 @@ export default function App() {
     const settingsToSave = {
       syncIntervalMinutes: appSettings.syncIntervalMinutes,
     };
+    appSettingsRef.current = settingsToSave;
     await setSetting("settings", settingsToSave);
     await setSetting("visibleColumns", visibleColumns);
     await clearStore("jiraFilters");
@@ -167,9 +178,69 @@ export default function App() {
       syncAbortControllerRef.current = null;
       setSyncProgress("");
       setSelectedIssue(null);
+      setSelectedSubtasks(null);
       setNextSyncAt(activeFilters.length ? Date.now() + syncIntervalMs() : null);
       await refreshData();
     }
+  }
+
+  function normalizeVisibleColumns(columns) {
+    const replacements = {
+      testingIssue: "testing",
+      testOwner: "testing",
+      developer: "testing",
+      criteriaTestingIssue: "criteriaTesting",
+      criteriaTestingOwner: "criteriaTesting",
+      criteriaTestingStatus: "criteriaTesting",
+      criteriaDocIssue: "criteriaDoc",
+      criteriaDocStatus: "criteriaDoc",
+      criteriaOwner: "criteriaDoc",
+      automationIssue: "automation",
+      automationOwner: "automation",
+      automationStatus: "automation",
+      trackingIssue: "tracking",
+      trackingOwner: "tracking",
+      trackingStatus: "tracking",
+      testDeployIssue: "testDeploy",
+      testDeployOwner: "testDeploy",
+      testDeployStatus: "testDeploy",
+      admonIssue: "admon",
+      admonOwner: "admon",
+      admonStatus: "admon",
+      preProdDeployIssue: "preProdDeploy",
+      preProdDeployOwner: "preProdDeploy",
+      preProdDeployStatus: "preProdDeploy",
+      preProdDeployTotalSubtasks: "preProdDeploy",
+      preProdDeployOpenSubtasks: "preProdDeploy",
+      preProdDeployOpenSubtaskKeys: "preProdDeploy",
+      preProdDeployUndefinedSubtasks: "preProdDeploy",
+      preProdDeployUndefinedSubtaskKeys: "preProdDeploy",
+      prodDeployIssue: "prodDeploy",
+      prodDeployOwner: "prodDeploy",
+      prodDeployStatus: "prodDeploy",
+      prodDeployTotalSubtasks: "prodDeploy",
+      prodDeployOpenSubtasks: "prodDeploy",
+      prodDeployOpenSubtaskKeys: "prodDeploy",
+      prodDeployUndefinedSubtasks: "prodDeploy",
+      prodDeployUndefinedSubtaskKeys: "prodDeploy",
+      firewallIssue: "firewall",
+      firewallOwner: "firewall",
+      firewallStatus: "firewall",
+      infrastructureIssue: "infrastructure",
+      infrastructureOwner: "infrastructure",
+      infrastructureStatus: "infrastructure",
+      preProdTestingIssue: "preProdTesting",
+      preProdTestingOwner: "preProdTesting",
+      preProdTestingStatus: "preProdTesting",
+      preProdCriteriaTestingIssue: "preProdCriteriaTesting",
+      preProdCriteriaTestingOwner: "preProdCriteriaTesting",
+      preProdCriteriaTestingStatus: "preProdCriteriaTesting",
+      preProdCriteriaDocIssue: "preProdCriteriaDoc",
+      preProdCriteriaDocOwner: "preProdCriteriaDoc",
+      preProdCriteriaDocStatus: "preProdCriteriaDoc",
+    };
+    const valid = new Set(gridColumnDefinitions.map((column) => column.key));
+    return [...new Set(columns.map((column) => replacements[column] || column).filter((column) => valid.has(column)))];
   }
 
   function stopSync() {
@@ -182,7 +253,7 @@ export default function App() {
   }
 
   function syncIntervalMs() {
-    return Math.max(1, Number(appSettings.syncIntervalMinutes || 5)) * 60000;
+    return Math.max(1, Number(appSettingsRef.current.syncIntervalMinutes || 5)) * 60000;
   }
 
   function formatCountdown(targetTime) {
@@ -225,12 +296,38 @@ export default function App() {
     return Number(hours) * 60 + Number(minutes);
   }
 
-  async function selectIssue(issueKey) {
+  async function selectIssue(issueKey, projectGroupId) {
+    lastClickedGroupIdRef.current = projectGroupId || lastClickedGroupIdRef.current;
     if (selectedIssue?.issueKey === issueKey) {
-      setSelectedIssue(null);
+      hideDetail();
       return;
     }
     setSelectedIssue(await get("issues", issueKey));
+    setSelectedSubtasks(null);
+    requestGridScroll(projectGroupId, "bottom");
+  }
+
+  function selectSubtasks(item, projectGroupId) {
+    lastClickedGroupIdRef.current = projectGroupId || lastClickedGroupIdRef.current;
+    setSelectedIssue(null);
+    setSelectedSubtasks({
+      issueKey: item.issueKey,
+      status: item.status,
+      progress: item.subtaskProgress,
+      subtasks: item.subtasks || [],
+    });
+    requestGridScroll(projectGroupId, "bottom");
+  }
+
+  function hideDetail() {
+    setSelectedIssue(null);
+    setSelectedSubtasks(null);
+    requestGridScroll(lastClickedGroupIdRef.current, "top");
+  }
+
+  function requestGridScroll(projectGroupId, position) {
+    if (!projectGroupId) return;
+    setGridScrollRequest({ projectGroupId, position, id: Date.now() });
   }
 
   return (
@@ -290,8 +387,14 @@ export default function App() {
             />
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, height: "calc(100vh - 190px)", minHeight: 520 }}>
-              <ProjectGrid projectGroups={sortedProjectGroups} visibleColumns={visibleColumns} onIssueClick={selectIssue} />
-              <IssueDetail issue={selectedIssue} onClose={() => setSelectedIssue(null)} />
+              <ProjectGrid
+                projectGroups={sortedProjectGroups}
+                visibleColumns={visibleColumns}
+                onIssueClick={selectIssue}
+                onSubtasksClick={selectSubtasks}
+                scrollRequest={gridScrollRequest}
+              />
+              <IssueDetail issue={selectedIssue} subtasks={selectedSubtasks} onClose={hideDetail} />
             </Box>
           )}
         </Stack>

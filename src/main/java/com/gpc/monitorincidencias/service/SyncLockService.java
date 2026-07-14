@@ -34,6 +34,15 @@ public class SyncLockService {
         return currentLock;
     }
 
+    public synchronized void refresh(String lockId) {
+        if (currentLock != null && currentLock.id().equals(lockId)) {
+            currentLock = new LockState(currentLock.id(), currentLock.owner(), OffsetDateTime.now());
+            logService.info("sync", "Lock refreshed id=" + lockId);
+        } else {
+            logService.warn("sync", "Refresh called for unknown or expired lock id=" + lockId);
+        }
+    }
+
     public synchronized void release(String lockId) {
         if (currentLock != null && currentLock.id().equals(lockId)) {
             logService.info("sync", "Lock released id=" + lockId);

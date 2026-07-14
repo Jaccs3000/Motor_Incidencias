@@ -11,7 +11,7 @@ monitor:
   logs:
     directory: Logs
   sync:
-    lock-timeout-minutes: 30
+    lock-timeout-minutes: 2
 
 jira:
   base-url: ""

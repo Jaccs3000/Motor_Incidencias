@@ -86,6 +86,37 @@ function statuses(issues) {
   return issues.map((issue) => status(issue));
 }
 
+function issueSummaries(issues, ownerFallback = "") {
+  return issues.map((issue) => ({
+    issueKey: issue.issueKey,
+    status: status(issue),
+    owner: owner(issue) || ownerFallback,
+  }));
+}
+
+function subtaskDetails(subtasks) {
+  return subtasks.map((issue) => ({
+    issueKey: issue.issueKey,
+    status: status(issue),
+    owner: owner(issue),
+    description: issue.summary || issue.attributes?.description || "",
+  }));
+}
+
+function issueSummariesWithSubtasks(issues, allIssues, ownerFallback = "") {
+  return issues.map((issue) => {
+    const subtasks = subtasksFor([issue], allIssues);
+    const closed = classifySubtasks(subtasks).closed.length;
+    return {
+      issueKey: issue.issueKey,
+      status: status(issue),
+      owner: owner(issue) || ownerFallback,
+      subtaskProgress: subtasks.length ? `${closed}/${subtasks.length}` : "",
+      subtasks: subtaskDetails(subtasks),
+    };
+  });
+}
+
 function subtasksFor(parentIssues, issues) {
   const childKeys = new Set(parentIssues.flatMap((issue) => issue.subtaskIssueKeys || []));
   return issues.filter((issue) => childKeys.has(issue.issueKey)).sort((a, b) => String(a.issueKey).localeCompare(String(b.issueKey)));
@@ -138,15 +169,26 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
     description: testing?.summary || issues[0]?.summary || rootIssueKey,
     generalStatus: generalStatus || testing?.status || issues[0]?.status || "",
     testingIssue: keys(testings),
+    testing: testings.map((issue) => ({
+      issueKey: issue.issueKey,
+      status: status(issue),
+      owner: developer(issue) || owner(issue),
+    })),
     testOwner: owners(testings),
     developer: developers(testings),
     plannedTimeHours: times(testings, "timeOriginalEstimate"),
     spentTimeHours: times(testings, "timeSpent"),
     remainingTimeHours: times(testings, "timeRemainingEstimate"),
     criteriaTestingIssue: keys(criteriaTestings),
+    criteriaTesting: issueSummaries(criteriaTestings, "Sin asignar"),
     criteriaTestingOwner: owners(criteriaTestings, "Sin asignar"),
     criteriaTestingStatus: statuses(criteriaTestings),
     criteriaDocIssue: keys(criteriaDocs),
+    criteriaDoc: criteriaDocs.map((issue) => ({
+      issueKey: issue.issueKey,
+      status: status(issue),
+      owner: owner(issue) || issue?.attributes.criteriaResponsible || "",
+    })),
     criteriaDocStatus: statuses(criteriaDocs),
     criteriaOwner: criteriaDocs.map((issue) => owner(issue) || issue?.attributes.criteriaResponsible || ""),
     criteriaPlannedTimeHours: times(criteriaDocs, "timeOriginalEstimate"),
@@ -154,18 +196,23 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
     criteriaRemainingTimeHours: times(criteriaDocs, "timeRemainingEstimate"),
     corrections,
     automationIssue: keys(automations),
+    automation: issueSummaries(automations, "Sin asignar"),
     automationOwner: owners(automations, "Sin asignar"),
     automationStatus: statuses(automations),
     trackingIssue: keys(trackings),
+    tracking: issueSummaries(trackings),
     trackingOwner: owners(trackings),
     trackingStatus: statuses(trackings),
     testDeployIssue: keys(testDeploys),
+    testDeploy: issueSummaries(testDeploys),
     testDeployOwner: owners(testDeploys),
     testDeployStatus: statuses(testDeploys),
     admonIssue: keys(admons),
+    admon: issueSummaries(admons),
     admonOwner: owners(admons),
     admonStatus: statuses(admons),
     preProdDeployIssue: keys(preProdDeploys),
+    preProdDeploy: issueSummariesWithSubtasks(preProdDeploys, issues),
     preProdDeployOwner: owners(preProdDeploys),
     preProdDeployStatus: statuses(preProdDeploys),
     preProdDeployTotalSubtasks: preProdSubtasks.open.length + preProdSubtasks.closed.length + preProdSubtasks.undefinedStatus.length,
@@ -174,6 +221,7 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
     preProdDeployUndefinedSubtasks: preProdSubtasks.undefinedStatus.length,
     preProdDeployUndefinedSubtaskKeys: keys(preProdSubtasks.undefinedStatus),
     prodDeployIssue: keys(prodDeploys),
+    prodDeploy: issueSummariesWithSubtasks(prodDeploys, issues),
     prodDeployOwner: owners(prodDeploys),
     prodDeployStatus: statuses(prodDeploys),
     prodDeployTotalSubtasks: prodSubtasks.open.length + prodSubtasks.closed.length + prodSubtasks.undefinedStatus.length,
@@ -182,18 +230,23 @@ export function buildProjectGroup(rootIssueKey, issueKeys, issueMap) {
     prodDeployUndefinedSubtasks: prodSubtasks.undefinedStatus.length,
     prodDeployUndefinedSubtaskKeys: keys(prodSubtasks.undefinedStatus),
     firewallIssue: keys(firewalls),
+    firewall: issueSummaries(firewalls),
     firewallOwner: owners(firewalls),
     firewallStatus: statuses(firewalls),
     infrastructureIssue: keys(infrastructures),
+    infrastructure: issueSummaries(infrastructures),
     infrastructureOwner: owners(infrastructures),
     infrastructureStatus: statuses(infrastructures),
     preProdTestingIssue: keys(preProdTestings),
+    preProdTesting: issueSummaries(preProdTestings, "Sin asignar"),
     preProdTestingOwner: owners(preProdTestings, "Sin asignar"),
     preProdTestingStatus: statuses(preProdTestings),
     preProdCriteriaTestingIssue: keys(preProdCriteriaTestings),
+    preProdCriteriaTesting: issueSummaries(preProdCriteriaTestings, "Sin asignar"),
     preProdCriteriaTestingOwner: owners(preProdCriteriaTestings, "Sin asignar"),
     preProdCriteriaTestingStatus: statuses(preProdCriteriaTestings),
     preProdCriteriaDocIssue: keys(preProdCriteriaDocs),
+    preProdCriteriaDoc: issueSummaries(preProdCriteriaDocs),
     preProdCriteriaDocOwner: owners(preProdCriteriaDocs),
     preProdCriteriaDocStatus: statuses(preProdCriteriaDocs),
     closedCriteriaPercent: criteria.length ? Math.round((closedCriteria / criteria.length) * 100) : 0,

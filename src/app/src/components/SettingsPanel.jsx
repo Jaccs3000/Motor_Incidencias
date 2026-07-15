@@ -1,7 +1,8 @@
 import { Box, Button, Checkbox, Chip, Divider, FormControlLabel, Grid, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { gridColumnDefinitions } from "../config/monitorConfig";
+import { setSetting } from "../db/database";
 import { createDefaultGridLayout, getAvailableFieldsForLayout, normalizeGridLayout } from "../utils/gridLayout";
 
 export function SettingsPanel({
@@ -26,10 +27,17 @@ export function SettingsPanel({
   const availableFieldKeys = useMemo(() => gridColumnDefinitions.map((column) => column.key), []);
   const availableFields = useMemo(() => getAvailableFieldsForLayout(draftLayout, availableFieldKeys), [draftLayout, availableFieldKeys]);
 
-  const applyDraftLayout = () => {
+  useEffect(() => {
+    setDraftRows(gridLayout?.rows || 1);
+    setDraftCols(gridLayout?.cols || 1);
+    setDraftLayout(gridLayout);
+  }, [gridLayout]);
+
+  const applyDraftLayout = async () => {
     const normalized = normalizeGridLayout(draftLayout, draftRows, draftCols, availableFieldKeys);
     setDraftLayout(normalized);
     setGridLayout(normalized);
+    await setSetting("gridLayout", normalized);
   };
 
   const resetLayout = () => {

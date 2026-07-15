@@ -98,7 +98,14 @@ export default function App() {
     const storedSettings = await getSetting("settings", defaultSettings);
     const mergedSettings = { ...defaultSettings, ...storedSettings };
     const storedColumns = normalizeVisibleColumns(await getSetting("visibleColumns", monitorConfig.defaultGridColumns));
-    const storedLayout = normalizeGridLayout(await getSetting("gridLayout", createDefaultGridLayout()), createDefaultGridLayout().rows, createDefaultGridLayout().cols, gridColumnDefinitions.map((column) => column.key));
+    const defaultLayout = createDefaultGridLayout();
+    const storedLayoutValue = await getSetting("gridLayout", defaultLayout);
+    const storedLayout = normalizeGridLayout(
+      storedLayoutValue,
+      storedLayoutValue?.rows || defaultLayout.rows,
+      storedLayoutValue?.cols || defaultLayout.cols,
+      gridColumnDefinitions.map((column) => column.key),
+    );
     const storedLastAttempt = await getSetting("lastSyncAttemptAt", null);
     const storedLastStatus = await getSetting("lastSyncStatus", "idle");
     const storedLastMessage = await getSetting("lastSyncMessage", "");
@@ -175,9 +182,10 @@ export default function App() {
       setSyncMessage(result.message);
       setSnackbar({ severity: result.status === "warning" || result.status === "interrupted" ? "warning" : "success", message: result.message });
     } catch (error) {
-      setSyncStatus("error");
-      setSyncMessage(error.message);
-      setSnackbar({ severity: "error", message: error.message });
+      const interrupted = error?.name === "AbortError" || error?.code === "ABORTED" || abortController.signal.aborted;
+      setSyncStatus(interrupted ? "interrupted" : "error");
+      setSyncMessage(interrupted ? "Sincronización interrumpida" : error.message);
+      setSnackbar({ severity: interrupted ? "warning" : "error", message: interrupted ? "Sincronización interrumpida" : error.message });
     } finally {
       syncingRef.current = false;
       syncAbortControllerRef.current = null;
@@ -258,8 +266,8 @@ export default function App() {
     if (!syncingRef.current) return;
     syncAbortControllerRef.current?.abort();
     setSyncStatus("interrupted");
-    setSyncMessage("Sincronizacion Interrumpida");
-    setSyncProgress("Deteniendo sincronizacion...");
+    setSyncMessage("Sincronización interrumpida");
+    setSyncProgress("Deteniendo sincronización...");
     setNextSyncAt(filtersRef.current.length ? Date.now() + syncIntervalMs() : null);
   }
 

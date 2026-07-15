@@ -2,7 +2,6 @@ package com.gpc.monitorincidencias.controller;
 
 import com.gpc.monitorincidencias.service.SyncLockService;
 import com.gpc.monitorincidencias.service.AppLogService;
-import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,10 +35,12 @@ public class SyncLockController {
     }
 
     @PostMapping("/acquire")
-    public ResponseEntity<Map<String, Object>> acquire(@Valid @RequestBody LockRequest request) {
+    public ResponseEntity<Map<String, Object>> acquire(@RequestBody Map<String, Object> request) {
         try {
-            var lock = syncLockService.acquire(request.owner());
-            logService.info("sync", "Lock acquired via API by " + request.owner() + " id=" + lock.id());
+            String owner = request.get("owner") == null ? "frontend" : String.valueOf(request.get("owner"));
+            boolean force = Boolean.TRUE.equals(request.get("force"));
+            var lock = syncLockService.acquire(owner, force);
+            logService.info("sync", "Lock acquired via API by " + owner + " id=" + lock.id());
             return ResponseEntity.ok(Map.of("lock", lock));
         } catch (IllegalStateException ex) {
             logService.warn("sync", "Failed to acquire lock: " + ex.getMessage());
@@ -48,22 +49,18 @@ public class SyncLockController {
     }
 
     @PostMapping("/release")
-    public Map<String, Object> release(@Valid @RequestBody ReleaseRequest request) {
-        logService.info("sync", "Release requested id=" + request.lockId());
-        syncLockService.release(request.lockId());
+    public Map<String, Object> release(@RequestBody Map<String, Object> request) {
+        String lockId = request.get("lockId") == null ? "" : String.valueOf(request.get("lockId"));
+        logService.info("sync", "Release requested id=" + lockId);
+        syncLockService.release(lockId);
         return Map.of("ok", true);
     }
 
     @PostMapping("/refresh")
-    public Map<String, Object> refresh(@Valid @RequestBody ReleaseRequest request) {
-        logService.info("sync", "Refresh requested id=" + request.lockId());
-        syncLockService.refresh(request.lockId());
+    public Map<String, Object> refresh(@RequestBody Map<String, Object> request) {
+        String lockId = request.get("lockId") == null ? "" : String.valueOf(request.get("lockId"));
+        logService.info("sync", "Refresh requested id=" + lockId);
+        syncLockService.refresh(lockId);
         return Map.of("ok", true);
-    }
-
-    public record LockRequest(String owner) {
-    }
-
-    public record ReleaseRequest(String lockId) {
     }
 }

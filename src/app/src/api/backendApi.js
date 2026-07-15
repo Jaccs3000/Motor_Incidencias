@@ -20,24 +20,29 @@ export async function fetchIssuesByKeys(issueKeys, options = {}) {
   return data;
 }
 
-export async function acquireSyncLock(owner = "frontend") {
+export async function acquireSyncLock(owner = "frontend", options = {}) {
   try {
-    const { data } = await api.post("/sync-lock/acquire", { owner });
+    const { data } = await api.post("/sync-lock/acquire", { owner, force: Boolean(options.force) }, { signal: options.signal });
     return data.lock;
   } catch (error) {
     if (error.response?.status === 409) {
-      throw new Error(error.response.data?.error || "Ya existe una sincronizacion en curso.");
+      throw Object.assign(new Error(error.response.data?.error || "Ya existe una sincronizacion en curso."), { code: "LOCK_CONFLICT" });
     }
     throw error;
   }
 }
 
-export async function releaseSyncLock(lockId) {
-  await api.post("/sync-lock/release", { lockId });
+export async function getSyncLockStatus() {
+  const { data } = await api.get("/sync-lock");
+  return data;
 }
 
-export async function refreshSyncLock(lockId) {
-  await api.post("/sync-lock/refresh", { lockId });
+export async function releaseSyncLock(lockId, options = {}) {
+  await api.post("/sync-lock/release", { lockId }, { signal: options.signal });
+}
+
+export async function refreshSyncLock(lockId, options = {}) {
+  await api.post("/sync-lock/refresh", { lockId }, { signal: options.signal });
 }
 
 export async function writeBackendLog(area, level, message) {

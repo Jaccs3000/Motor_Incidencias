@@ -1,4 +1,4 @@
-import { Box, Button, IconButton, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography } from "@mui/material";
+import { Box, Button, IconButton, Paper, TableContainer, Tooltip, Typography } from "@mui/material";
 import { ChevronUp, Hourglass } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { gridColumnDefinitions } from "../config/monitorConfig";
@@ -33,6 +33,7 @@ export function ProjectGrid({ projectGroups, visibleColumns, gridLayout, onIssue
     container.scrollTo({ top: Math.max(0, target), left: container.scrollLeft, behavior: "smooth" });
   }, [scrollRequest]);
 
+
   if (!projectGroups.length) {
     return (
       <Paper variant="outlined" sx={{ p: 3 }}>
@@ -44,46 +45,61 @@ export function ProjectGrid({ projectGroups, visibleColumns, gridLayout, onIssue
   return (
     <TableContainer ref={containerRef} component={Paper} variant="outlined" sx={{ flex: 1, minHeight: 260, overflow: "auto" }}>
       <Box sx={{ p: 1.5 }}>
-        {projectGroups.map((group) => {
-          const isExpanded = expandedRows.has(group.projectGroupId);
-          return (
-            <Box
-              key={group.projectGroupId}
-              ref={(element) => {
-                if (element) rowRefs.current.set(group.projectGroupId, element);
-                else rowRefs.current.delete(group.projectGroupId);
-              }}
-              sx={{ mb: 2, border: "1px solid #e5e7eb", borderRadius: 2, overflow: "hidden", bgcolor: "#fff" }}
-            >
-              <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${gridLayout?.cols || 1}, minmax(0, 1fr))`, gap: 1, p: 1 }}>
-                {Array.from({ length: (gridLayout?.rows || 1) * (gridLayout?.cols || 1) }).map((_, index) => {
-                  const row = Math.floor(index / (gridLayout?.cols || 1));
-                  const col = index % (gridLayout?.cols || 1);
-                  const fieldKey = getCellField(gridLayout, row, col);
-                  const column = fieldKey ? definitions.get(fieldKey) : null;
-                  const value = column ? group.computedFields?.[column.key] ?? "" : "";
-                  return (
-                    <Box key={`${group.projectGroupId}-${row}-${col}`} sx={{ minHeight: 86, border: "1px solid #f1f5f9", borderRadius: 1, bgcolor: fieldKey ? "#f8fafc" : "#f3f4f6", p: 1 }}>
-                      {column ? (
-                        <CellValue
-                          value={value}
-                          column={column}
-                          expanded={isExpanded}
-                          onExpand={() => toggleRow(group.projectGroupId, true)}
-                          onCollapse={() => toggleRow(group.projectGroupId, false)}
-                          onIssueClick={(issueKey) => onIssueClick(issueKey, group.projectGroupId)}
-                          onSubtasksClick={(item) => onSubtasksClick(item, group.projectGroupId)}
-                        />
-                      ) : (
-                        <Box sx={{ height: "100%", border: "1px dashed #d1d5db", borderRadius: 1, bgcolor: "#f3f4f6" }} />
-                      )}
-                    </Box>
-                  );
-                })}
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(520px, 1fr))", gap: 2 }}>
+          {projectGroups.map((group) => {
+            const isExpanded = expandedRows.has(group.projectGroupId);
+            return (
+              <Box
+                key={group.projectGroupId}
+                ref={(element) => {
+                  if (element) rowRefs.current.set(group.projectGroupId, element);
+                  else rowRefs.current.delete(group.projectGroupId);
+                }}
+                sx={{ mb: 0, border: "1px solid #e5e7eb", borderRadius: 2, overflow: "hidden", bgcolor: "#fff" }}
+              >
+                <Box sx={{ p: 1 }}>
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: `repeat(${Math.max(1, gridLayout?.cols || 1)}, minmax(0, 1fr))`,
+                      gap: 1,
+                    }}
+                  >
+                    {Array.from({ length: (gridLayout?.rows || 1) * (gridLayout?.cols || 1) }).map((_, index) => {
+                      const row = Math.floor(index / (gridLayout?.cols || 1));
+                      const col = index % (gridLayout?.cols || 1);
+                      const fieldKey = getCellField(gridLayout, row, col);
+                      const column = fieldKey ? definitions.get(fieldKey) : null;
+                      const value = column ? group.computedFields?.[column.key] ?? "" : "";
+                      return (
+                        <Box key={`${group.projectGroupId}-${row}-${col}`} sx={{ minHeight: 86, border: "1px solid #f1f5f9", borderRadius: 1, bgcolor: fieldKey ? "#f8fafc" : "#f3f4f6", p: 1 }}>
+                          {column ? (
+                            <>
+                              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {column.label}
+                              </Typography>
+                              <CellValue
+                                value={value}
+                                column={column}
+                                expanded={isExpanded}
+                                onExpand={() => toggleRow(group.projectGroupId, true)}
+                                onCollapse={() => toggleRow(group.projectGroupId, false)}
+                                onIssueClick={(issueKey) => onIssueClick(issueKey, group.projectGroupId)}
+                                onSubtasksClick={(item) => onSubtasksClick(item, group.projectGroupId)}
+                              />
+                            </>
+                          ) : (
+                            <Box sx={{ height: "100%", border: "1px dashed #d1d5db", borderRadius: 1, bgcolor: "#f3f4f6" }} />
+                          )}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
               </Box>
-            </Box>
-          );
-        })}
+            );
+          })}
+        </Box>
       </Box>
     </TableContainer>
   );
@@ -99,9 +115,9 @@ function CellValue({ value, column, expanded, onExpand, onCollapse, onIssueClick
   const hiddenCount = filteredValues.length - 1;
 
   return (
-    <Box sx={{ minHeight: 30, whiteSpace: "nowrap" }}>
+    <Box sx={{ minHeight: 30 }}>
       {visibleValues.map((item, index) => (
-        <Box key={`${item?.issueKey || item}-${index}`} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30, whiteSpace: "nowrap" }}>
+        <Box key={`${item?.issueKey || item}-${index}`} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30, flexWrap: "wrap" }}>
           <Box component="span" sx={{ whiteSpace: "nowrap" }}>
             <SingleValue item={item} column={column} onIssueClick={onIssueClick} onSubtasksClick={onSubtasksClick} />
           </Box>
@@ -145,7 +161,7 @@ function SingleValue({ item, column, onIssueClick, onSubtasksClick }) {
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "normal",
-            maxWidth: column.key === "description" ? 260 : 180,
+            maxWidth: '100%',
           }}
         >
           {item}
@@ -159,22 +175,21 @@ function SingleValue({ item, column, onIssueClick, onSubtasksClick }) {
 function IssueSummaryValue({ item, onIssueClick, onSubtasksClick }) {
   const issueKey = item?.issueKey || "";
   return (
-    <Box sx={{ lineHeight: 1.25, whiteSpace: "nowrap" }}>
-      <Box sx={{ fontWeight: 700 }}>
-        <Button size="small" variant="text" disabled={!issueKey} onClick={() => onIssueClick(issueKey)} sx={{ minWidth: 0, px: 0, mr: 0.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+    <Box sx={{ lineHeight: 1.25 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, overflow: 'hidden' }}>
+        <Button size="small" variant="text" disabled={!issueKey} onClick={() => onIssueClick(issueKey)} sx={{ minWidth: 0, px: 0, fontWeight: 700, whiteSpace: "nowrap" }}>
           {issueKey}
         </Button>
-        {item?.status ? ` - ${item.status}` : ""}
+        <Typography component="span" variant="body2" sx={{ flex: '1 1 auto', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {item?.status ? ` - ${item.status}` : ""}
+        </Typography>
         {item?.subtaskProgress ? (
-          <>
-            {" - "}
-            <Button size="small" variant="text" onClick={() => onSubtasksClick?.(item)} sx={{ minWidth: 0, px: 0, fontWeight: 700, whiteSpace: "nowrap" }}>
-              {item.subtaskProgress}
-            </Button>
-          </>
+          <Button size="small" variant="text" onClick={() => onSubtasksClick?.(item)} sx={{ minWidth: 0, px: 0, fontWeight: 700, whiteSpace: "nowrap" }}>
+            {item.subtaskProgress}
+          </Button>
         ) : null}
       </Box>
-      <Box>{abbreviatePersonName(item?.owner || "Sin asignar")}</Box>
+      <Box sx={{ mt: 0.5 }}>{abbreviatePersonName(item?.owner || "Sin asignar")}</Box>
       <TimeProgressBar progress={item?.timeProgress} />
     </Box>
   );

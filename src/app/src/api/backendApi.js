@@ -1,7 +1,9 @@
 import axios from "axios";
 
+const env = import.meta.env ?? {};
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api",
+  baseURL: env.VITE_API_BASE_URL || "http://localhost:8080/api",
   timeout: 60000,
 });
 
@@ -43,6 +45,11 @@ export async function releaseSyncLock(lockId, options = {}) {
 
 export async function refreshSyncLock(lockId, options = {}) {
   await api.post("/sync-lock/refresh", { lockId }, { signal: options.signal });
+}
+
+export async function getMyself() {
+  const { data } = await api.get("/jira/myself");
+  return data;
 }
 
 export async function writeBackendLog(area, level, message) {

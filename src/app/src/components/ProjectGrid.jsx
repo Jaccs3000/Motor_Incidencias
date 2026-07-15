@@ -4,9 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { gridColumnDefinitions } from "../config/monitorConfig";
 import { getCellField } from "../utils/gridLayout";
 
-export function ProjectGrid({ projectGroups, visibleColumns, gridLayout, onIssueClick, onSubtasksClick, scrollRequest }) {
+export function ProjectGrid({ projectGroups, gridLayout, onIssueClick, onSubtasksClick, scrollRequest }) {
   const definitions = new Map(gridColumnDefinitions.map((column) => [column.key, column]));
-  const columns = visibleColumns.map((key) => definitions.get(key)).filter(Boolean);
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const containerRef = useRef(null);
   const rowRefs = useRef(new Map());

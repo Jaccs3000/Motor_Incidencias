@@ -24,13 +24,30 @@ function formatJiraValue(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`;
 }
 
+function normalizeConditionValue(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 export function evaluateCondition(context, condition) {
-  const value = context[condition.field];
+  const field = String(condition.field || "").trim();
+  const value = context[field] ?? context[field.toLowerCase()] ?? context[field.toUpperCase()];
   const expected = condition.value;
-  if (condition.operator === "=") return String(value ?? "") === String(expected ?? "");
-  if (condition.operator === "!=") return String(value ?? "") !== String(expected ?? "");
-  if (condition.operator === "contains") return String(value ?? "").toLowerCase().includes(String(expected ?? "").toLowerCase());
-  if (condition.operator === "not_contains") return !String(value ?? "").toLowerCase().includes(String(expected ?? "").toLowerCase());
+  const normalizedValue = normalizeConditionValue(value);
+  const normalizedAltValue = normalizeConditionValue(context[`${field}AccountId`] ?? context[`${field}Id`] ?? "");
+  const normalizedExpected = normalizeConditionValue(expected);
+
+  if (condition.operator === "=") {
+    return normalizedValue === normalizedExpected || normalizedAltValue === normalizedExpected;
+  }
+  if (condition.operator === "!=") {
+    return normalizedValue !== normalizedExpected && normalizedAltValue !== normalizedExpected;
+  }
+  if (condition.operator === "contains") {
+    return normalizedValue.includes(normalizedExpected) || normalizedAltValue.includes(normalizedExpected);
+  }
+  if (condition.operator === "not_contains") {
+    return !normalizedValue.includes(normalizedExpected) && !normalizedAltValue.includes(normalizedExpected);
+  }
   if (condition.operator === ">") return Number(value) > Number(expected);
   if (condition.operator === ">=") return Number(value) >= Number(expected);
   if (condition.operator === "<") return Number(value) < Number(expected);

@@ -1,5 +1,5 @@
-import { Box, Button, Checkbox, Chip, Divider, FormControlLabel, Grid, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { Box, Button, Chip, Divider, Grid, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography } from "@mui/material";
+import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { gridColumnDefinitions } from "../config/monitorConfig";
 import { setSetting } from "../db/database";
@@ -12,15 +12,12 @@ export function SettingsPanel({
   setFilters,
   alertRules,
   setAlertRules,
-  visibleColumns,
-  setVisibleColumns,
   gridLayout,
   setGridLayout,
   onSave,
 }) {
   const addFilter = () => setFilters([...filters, emptyFilter()]);
   const addAlert = () => setAlertRules([...alertRules, emptyAlert()]);
-  const orderedGridColumns = orderGridColumns(visibleColumns);
   const [draftRows, setDraftRows] = useState(gridLayout?.rows || 1);
   const [draftCols, setDraftCols] = useState(gridLayout?.cols || 1);
   const [draftLayout, setDraftLayout] = useState(gridLayout);
@@ -119,14 +116,25 @@ export function SettingsPanel({
                 <Grid size={{ xs: 12, md: 3 }}>
                   <TextField fullWidth label="Nombre" value={alert.name} onChange={(e) => updateAt(alertRules, setAlertRules, index, { ...alert, name: e.target.value })} />
                 </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField fullWidth label="Campo" value={alert.conditions[0]?.field || ""} onChange={(e) => updateAlertCondition(alertRules, setAlertRules, index, "field", e.target.value)} />
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <Select
+                    fullWidth
+                    value={alert.actionType || "update"}
+                    onChange={(e) => updateAt(alertRules, setAlertRules, index, { ...alert, actionType: e.target.value })}
+                  >
+                    <MenuItem value="insert">Insert</MenuItem>
+                    <MenuItem value="update">Update</MenuItem>
+                    <MenuItem value="delete">Delete</MenuItem>
+                  </Select>
                 </Grid>
-                <Grid size={{ xs: 6, md: 1 }}>
-                  <TextField fullWidth label="Op" value={alert.conditions[0]?.operator || "="} onChange={(e) => updateAlertCondition(alertRules, setAlertRules, index, "operator", e.target.value)} />
-                </Grid>
-                <Grid size={{ xs: 6, md: 3 }}>
-                  <TextField fullWidth label="Valor" value={alert.conditions[0]?.value || ""} onChange={(e) => updateAlertCondition(alertRules, setAlertRules, index, "value", e.target.value)} />
+                <Grid size={{ xs: 12, md: 5 }}>
+                  <TextField
+                    fullWidth
+                    label="JQL"
+                    value={alert.jql || ""}
+                    onChange={(e) => updateAt(alertRules, setAlertRules, index, { ...alert, jql: e.target.value })}
+                    helperText="Regla JQL para filtrar el issue en la acción"
+                  />
                 </Grid>
                 <Grid size={{ xs: 12, md: 1 }}>
                   <IconButton onClick={() => setAlertRules(alertRules.filter((_, itemIndex) => itemIndex !== index))}><Trash2 size={18} /></IconButton>
@@ -206,28 +214,6 @@ export function SettingsPanel({
         </Box>
       </Paper>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="h6">Columnas del grid</Typography>
-        <Grid container spacing={1} sx={{ mt: 1 }}>
-          {orderedGridColumns.map((column) => {
-            const checked = visibleColumns.includes(column.key);
-            return (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={column.key}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <IconButton size="small" disabled={!checked} onClick={() => moveColumn(column.key, -1, visibleColumns, setVisibleColumns)}><ArrowUp size={16} /></IconButton>
-                <IconButton size="small" disabled={!checked} onClick={() => moveColumn(column.key, 1, visibleColumns, setVisibleColumns)}><ArrowDown size={16} /></IconButton>
-                <FormControlLabel
-                  control={<Checkbox checked={checked} onChange={(event) => toggleColumn(column.key, event.target.checked, visibleColumns, setVisibleColumns)} />}
-                  label={column.label}
-                  sx={{ flex: 1 }}
-                />
-              </Box>
-            </Grid>
-            );
-          })}
-        </Grid>
-      </Paper>
-
       <Divider />
       <Button variant="contained" onClick={onSave}>Guardar configuración</Button>
     </Stack>
@@ -239,7 +225,16 @@ function emptyFilter() {
 }
 
 function emptyAlert() {
-  return { id: crypto.randomUUID(), name: "Nueva alerta", conditions: [{ field: "status", operator: "=", value: "Cerrado", joiner: "AND" }], messageTemplate: "{{issueKey}} cumple la alerta {{status}}", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  return {
+    id: crypto.randomUUID(),
+    name: "Nueva alerta",
+    actionType: "update",
+    jql: 'status = "Cerrado"',
+    conditions: [],
+    messageTemplate: "{{issueKey}} cumple la alerta {{status}}",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function updateAt(items, setter, index, value) {
@@ -252,22 +247,3 @@ function updateAlertCondition(items, setter, index, key, value) {
   updateAt(items, setter, index, { ...alert, conditions: [condition] });
 }
 
-function orderGridColumns(visibleColumns) {
-  const definitions = new Map(gridColumnDefinitions.map((column) => [column.key, column]));
-  const visible = visibleColumns.map((key) => definitions.get(key)).filter(Boolean);
-  const hidden = gridColumnDefinitions.filter((column) => !visibleColumns.includes(column.key));
-  return [...visible, ...hidden];
-}
-
-function toggleColumn(key, checked, visibleColumns, setVisibleColumns) {
-  setVisibleColumns(checked ? [...visibleColumns, key] : visibleColumns.filter((column) => column !== key));
-}
-
-function moveColumn(key, direction, visibleColumns, setVisibleColumns) {
-  const index = visibleColumns.indexOf(key);
-  const target = index + direction;
-  if (index < 0 || target < 0 || target >= visibleColumns.length) return;
-  const copy = [...visibleColumns];
-  [copy[index], copy[target]] = [copy[target], copy[index]];
-  setVisibleColumns(copy);
-}

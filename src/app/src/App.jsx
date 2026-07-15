@@ -23,7 +23,6 @@ export default function App() {
   const [appSettings, setAppSettings] = useState(defaultSettings);
   const [filters, setFilters] = useState([]);
   const [alertRules, setAlertRules] = useState([]);
-  const [visibleColumns, setVisibleColumns] = useState(monitorConfig.defaultGridColumns);
   const [gridLayout, setGridLayout] = useState(createDefaultGridLayout());
   const [projectGroups, setProjectGroups] = useState([]);
   const [selectedIssue, setSelectedIssue] = useState(null);
@@ -97,7 +96,6 @@ export default function App() {
   async function initialize() {
     const storedSettings = await getSetting("settings", defaultSettings);
     const mergedSettings = { ...defaultSettings, ...storedSettings };
-    const storedColumns = normalizeVisibleColumns(await getSetting("visibleColumns", monitorConfig.defaultGridColumns));
     const defaultLayout = createDefaultGridLayout();
     const storedLayoutValue = await getSetting("gridLayout", defaultLayout);
     const storedLayout = normalizeGridLayout(
@@ -114,7 +112,15 @@ export default function App() {
     const storedFilters = await getAll("jiraFilters");
     setFilters(storedFilters);
     setAlertRules(await getAll("alertRules"));
-    setVisibleColumns(storedColumns);
+    // --- INYECCIÓN TEMPORAL DE PRUEBA: escribir setting para que el sincronizador inyecte una alertRule de prueba
+    try {
+      await setSetting("test.injectAlert", { issueKey: "ADI-2851", actionType: "update", name: "AutoInject ADI-2851" });
+      // console.log para ayudar en debugging
+      // eslint-disable-next-line no-console
+      console.log("test.injectAlert written");
+    } catch (e) {
+      // ignore
+    }
     setGridLayout(storedLayout);
     setProjectGroups(await getAll("projectGroups"));
     setNotifications(await getUnreadNotifications());
@@ -141,7 +147,6 @@ export default function App() {
     };
     appSettingsRef.current = settingsToSave;
     await setSetting("settings", settingsToSave);
-    await setSetting("visibleColumns", visibleColumns);
     await setSetting("gridLayout", gridLayout);
     await clearStore("jiraFilters");
     await putMany("jiraFilters", filters);
@@ -175,6 +180,7 @@ export default function App() {
     try {
       const result = await runSynchronization({
         jiraBaseUrl: (backendStatusOverride || backendStatusRef.current)?.jira?.baseUrl || "",
+        filters: activeFilters,
         onProgress: setSyncProgress,
         signal: abortController.signal,
       });
@@ -197,70 +203,6 @@ export default function App() {
     }
   }
 
-  function normalizeVisibleColumns(columns) {
-    const replacements = {
-      testingIssue: "testing",
-      testOwner: "testing",
-      developer: "testing",
-      plannedTimeHours: "testing",
-      spentTimeHours: "testing",
-      remainingTimeHours: "testing",
-      criteriaTestingIssue: "criteriaTesting",
-      criteriaTestingOwner: "criteriaTesting",
-      criteriaTestingStatus: "criteriaTesting",
-      criteriaDocIssue: "criteriaDoc",
-      criteriaDocStatus: "criteriaDoc",
-      criteriaOwner: "criteriaDoc",
-      criteriaPlannedTimeHours: "criteriaDoc",
-      criteriaSpentTimeHours: "criteriaDoc",
-      criteriaRemainingTimeHours: "criteriaDoc",
-      automationIssue: "automation",
-      automationOwner: "automation",
-      automationStatus: "automation",
-      trackingIssue: "tracking",
-      trackingOwner: "tracking",
-      trackingStatus: "tracking",
-      testDeployIssue: "testDeploy",
-      testDeployOwner: "testDeploy",
-      testDeployStatus: "testDeploy",
-      admonIssue: "admon",
-      admonOwner: "admon",
-      admonStatus: "admon",
-      preProdDeployIssue: "preProdDeploy",
-      preProdDeployOwner: "preProdDeploy",
-      preProdDeployStatus: "preProdDeploy",
-      preProdDeployTotalSubtasks: "preProdDeploy",
-      preProdDeployOpenSubtasks: "preProdDeploy",
-      preProdDeployOpenSubtaskKeys: "preProdDeploy",
-      preProdDeployUndefinedSubtasks: "preProdDeploy",
-      preProdDeployUndefinedSubtaskKeys: "preProdDeploy",
-      prodDeployIssue: "prodDeploy",
-      prodDeployOwner: "prodDeploy",
-      prodDeployStatus: "prodDeploy",
-      prodDeployTotalSubtasks: "prodDeploy",
-      prodDeployOpenSubtasks: "prodDeploy",
-      prodDeployOpenSubtaskKeys: "prodDeploy",
-      prodDeployUndefinedSubtasks: "prodDeploy",
-      prodDeployUndefinedSubtaskKeys: "prodDeploy",
-      firewallIssue: "firewall",
-      firewallOwner: "firewall",
-      firewallStatus: "firewall",
-      infrastructureIssue: "infrastructure",
-      infrastructureOwner: "infrastructure",
-      infrastructureStatus: "infrastructure",
-      preProdTestingIssue: "preProdTesting",
-      preProdTestingOwner: "preProdTesting",
-      preProdTestingStatus: "preProdTesting",
-      preProdCriteriaTestingIssue: "preProdCriteriaTesting",
-      preProdCriteriaTestingOwner: "preProdCriteriaTesting",
-      preProdCriteriaTestingStatus: "preProdCriteriaTesting",
-      preProdCriteriaDocIssue: "preProdCriteriaDoc",
-      preProdCriteriaDocOwner: "preProdCriteriaDoc",
-      preProdCriteriaDocStatus: "preProdCriteriaDoc",
-    };
-    const valid = new Set(gridColumnDefinitions.map((column) => column.key));
-    return [...new Set(columns.map((column) => replacements[column] || column).filter((column) => valid.has(column)))];
-  }
 
   function stopSync() {
     if (!syncingRef.current) return;
@@ -407,8 +349,6 @@ export default function App() {
               setFilters={setFilters}
               alertRules={alertRules}
               setAlertRules={setAlertRules}
-              visibleColumns={visibleColumns}
-              setVisibleColumns={setVisibleColumns}
               gridLayout={gridLayout}
               setGridLayout={setGridLayout}
               onSave={saveSettings}
@@ -417,7 +357,6 @@ export default function App() {
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, height: "calc(100vh - 190px)", minHeight: 520 }}>
               <ProjectGrid
                 projectGroups={sortedProjectGroups}
-                visibleColumns={visibleColumns}
                 gridLayout={gridLayout}
                 onIssueClick={selectIssue}
                 onSubtasksClick={selectSubtasks}

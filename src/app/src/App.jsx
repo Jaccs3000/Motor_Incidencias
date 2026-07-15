@@ -12,6 +12,7 @@ import { gridColumnDefinitions, monitorConfig } from "./config/monitorConfig";
 import { clearStore, get, getAll, getSetting, putMany, setSetting } from "./db/database";
 import { getUnreadNotifications } from "./services/notificationService";
 import { runSynchronization } from "./services/syncService";
+import { createDefaultGridLayout, normalizeGridLayout } from "./utils/gridLayout";
 
 const defaultSettings = {
   syncIntervalMinutes: 5,
@@ -23,6 +24,7 @@ export default function App() {
   const [filters, setFilters] = useState([]);
   const [alertRules, setAlertRules] = useState([]);
   const [visibleColumns, setVisibleColumns] = useState(monitorConfig.defaultGridColumns);
+  const [gridLayout, setGridLayout] = useState(createDefaultGridLayout());
   const [projectGroups, setProjectGroups] = useState([]);
   const [selectedIssue, setSelectedIssue] = useState(null);
   const [selectedSubtasks, setSelectedSubtasks] = useState(null);
@@ -96,6 +98,7 @@ export default function App() {
     const storedSettings = await getSetting("settings", defaultSettings);
     const mergedSettings = { ...defaultSettings, ...storedSettings };
     const storedColumns = normalizeVisibleColumns(await getSetting("visibleColumns", monitorConfig.defaultGridColumns));
+    const storedLayout = normalizeGridLayout(await getSetting("gridLayout", createDefaultGridLayout()), createDefaultGridLayout().rows, createDefaultGridLayout().cols, gridColumnDefinitions.map((column) => column.key));
     const storedLastAttempt = await getSetting("lastSyncAttemptAt", null);
     const storedLastStatus = await getSetting("lastSyncStatus", "idle");
     const storedLastMessage = await getSetting("lastSyncMessage", "");
@@ -105,6 +108,7 @@ export default function App() {
     setFilters(storedFilters);
     setAlertRules(await getAll("alertRules"));
     setVisibleColumns(storedColumns);
+    setGridLayout(storedLayout);
     setProjectGroups(await getAll("projectGroups"));
     setNotifications(await getUnreadNotifications());
     setLastAttemptAt(storedLastAttempt);
@@ -131,6 +135,7 @@ export default function App() {
     appSettingsRef.current = settingsToSave;
     await setSetting("settings", settingsToSave);
     await setSetting("visibleColumns", visibleColumns);
+    await setSetting("gridLayout", gridLayout);
     await clearStore("jiraFilters");
     await putMany("jiraFilters", filters);
     await clearStore("alertRules");
@@ -396,6 +401,8 @@ export default function App() {
               setAlertRules={setAlertRules}
               visibleColumns={visibleColumns}
               setVisibleColumns={setVisibleColumns}
+              gridLayout={gridLayout}
+              setGridLayout={setGridLayout}
               onSave={saveSettings}
             />
           ) : (
@@ -403,6 +410,7 @@ export default function App() {
               <ProjectGrid
                 projectGroups={sortedProjectGroups}
                 visibleColumns={visibleColumns}
+                gridLayout={gridLayout}
                 onIssueClick={selectIssue}
                 onSubtasksClick={selectSubtasks}
                 scrollRequest={gridScrollRequest}

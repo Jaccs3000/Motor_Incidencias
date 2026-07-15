@@ -2,8 +2,9 @@ import { Box, Button, IconButton, Paper, Table, TableBody, TableCell, TableConta
 import { ChevronUp, Hourglass } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { gridColumnDefinitions } from "../config/monitorConfig";
+import { getCellField } from "../utils/gridLayout";
 
-export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick, onSubtasksClick, scrollRequest }) {
+export function ProjectGrid({ projectGroups, visibleColumns, gridLayout, onIssueClick, onSubtasksClick, scrollRequest }) {
   const definitions = new Map(gridColumnDefinitions.map((column) => [column.key, column]));
   const columns = visibleColumns.map((key) => definitions.get(key)).filter(Boolean);
   const [expandedRows, setExpandedRows] = useState(() => new Set());
@@ -42,47 +43,48 @@ export function ProjectGrid({ projectGroups, visibleColumns, onIssueClick, onSub
 
   return (
     <TableContainer ref={containerRef} component={Paper} variant="outlined" sx={{ flex: 1, minHeight: 260, overflow: "auto" }}>
-      <Table size="small" stickyHeader sx={{ minWidth: "100%", width: "max-content" }}>
-        <TableHead>
-          <TableRow>
-            {columns.map((column) => (
-              <TableCell key={column.key} sx={{ fontWeight: 700, minWidth: column.key === "description" ? 195 : 130, whiteSpace: "nowrap" }}>{column.label}</TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {projectGroups.map((group) => {
-            const isExpanded = expandedRows.has(group.projectGroupId);
-            return (
-              <TableRow
-                key={group.projectGroupId}
-                hover
-                ref={(element) => {
-                  if (element) rowRefs.current.set(group.projectGroupId, element);
-                  else rowRefs.current.delete(group.projectGroupId);
-                }}
-              >
-                {columns.map((column) => {
-                  const value = group.computedFields?.[column.key] ?? "";
+      <Box sx={{ p: 1.5 }}>
+        {projectGroups.map((group) => {
+          const isExpanded = expandedRows.has(group.projectGroupId);
+          return (
+            <Box
+              key={group.projectGroupId}
+              ref={(element) => {
+                if (element) rowRefs.current.set(group.projectGroupId, element);
+                else rowRefs.current.delete(group.projectGroupId);
+              }}
+              sx={{ mb: 2, border: "1px solid #e5e7eb", borderRadius: 2, overflow: "hidden", bgcolor: "#fff" }}
+            >
+              <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${gridLayout?.cols || 1}, minmax(0, 1fr))`, gap: 1, p: 1 }}>
+                {Array.from({ length: (gridLayout?.rows || 1) * (gridLayout?.cols || 1) }).map((_, index) => {
+                  const row = Math.floor(index / (gridLayout?.cols || 1));
+                  const col = index % (gridLayout?.cols || 1);
+                  const fieldKey = getCellField(gridLayout, row, col);
+                  const column = fieldKey ? definitions.get(fieldKey) : null;
+                  const value = column ? group.computedFields?.[column.key] ?? "" : "";
                   return (
-                    <TableCell key={column.key} sx={{ verticalAlign: "top", whiteSpace: "nowrap" }}>
-                      <CellValue
-                        value={value}
-                        column={column}
-                        expanded={isExpanded}
-                        onExpand={() => toggleRow(group.projectGroupId, true)}
-                        onCollapse={() => toggleRow(group.projectGroupId, false)}
-                        onIssueClick={(issueKey) => onIssueClick(issueKey, group.projectGroupId)}
-                        onSubtasksClick={(item) => onSubtasksClick(item, group.projectGroupId)}
-                      />
-                    </TableCell>
+                    <Box key={`${group.projectGroupId}-${row}-${col}`} sx={{ minHeight: 86, border: "1px solid #f1f5f9", borderRadius: 1, bgcolor: fieldKey ? "#f8fafc" : "#f3f4f6", p: 1 }}>
+                      {column ? (
+                        <CellValue
+                          value={value}
+                          column={column}
+                          expanded={isExpanded}
+                          onExpand={() => toggleRow(group.projectGroupId, true)}
+                          onCollapse={() => toggleRow(group.projectGroupId, false)}
+                          onIssueClick={(issueKey) => onIssueClick(issueKey, group.projectGroupId)}
+                          onSubtasksClick={(item) => onSubtasksClick(item, group.projectGroupId)}
+                        />
+                      ) : (
+                        <Box sx={{ height: "100%", border: "1px dashed #d1d5db", borderRadius: 1, bgcolor: "#f3f4f6" }} />
+                      )}
+                    </Box>
                   );
                 })}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
     </TableContainer>
   );
 }
